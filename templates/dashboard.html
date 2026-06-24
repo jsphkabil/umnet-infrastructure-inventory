@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang=""en">
+<head>
+    <meta charset=""UTF-8">
+    <title>Spares Room Inventory</title>
+    <style>
+        body { font-family: sans-serif; margin: 40px; background: #f4f6f9; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
+        th, td { padding: 12px; text-align: lef; border-bottom: 1px solid #ddd; }
+        th { background-color: #007bff; color: white; }
+    </style>
+</head>>
+<body>
+    <h1>Spares Room Live Inventory</h1>
+    <div style="background: white; padding: 20px; border-radius: 5px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+        <h3>Add Inventory Item</h3>
+        <form action="/add" method=""POST">
+            <label>Product ID (e.g., EX3300);</label>
+            <input type="text" name="product_id" required placeholder="EX3300">
+
+            <label>Product Name</label>
+            <label>Product Name:</label>
+            <input type="text" name="product_name" required placeholder="Juniper Switch">
+            
+            <label>Storage Unit ID:</label>
+            <input type="text" name="container_id" required placeholder="PALLET-01 or SHELF-A">
+            
+            <label>Storage Type:</label>
+            <select name="container_type">
+                <option value="Pallet">Pallet</option>
+                <option value="Shelf">Shelf</option>
+            </select>
+            
+            <label>Quantity:</label>
+            <input type="number" name="quantity" min="1" required value="1">
+            
+            <button type="submit" style="background: #007bff; color: white; border: none; padding: 8px 15px; cursor: pointer; border-radius: 3px;">
+                Save to Inventory
+            </button>
+        </form>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Equipment Name</th>
+                <th>Storage Unit </th>
+                <th>Type</th>
+                <th>Quantity</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in inventory %}
+            <tr>
+                <td>{{ item.name }}</td>
+                <td>{{ item.container }}</td>
+                <td>{{ item.type}}</td>
+                <td><strong>{{ item.quantity }}</strong></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</body>
+</html>
