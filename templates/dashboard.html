@@ -66,11 +66,11 @@
                            class="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-michigan-blue/30 focus:border-michigan-blue transition-all placeholder-slate-400">
                 </div>
 
-                <div id="sidebar-models-list" class="divide-y divide-slate-100 max-h-[calc(100vh-260px)] overflow-y-auto">
+                <div id="sidebar-models-list" class="space-y-1 p-2 max-h-[calc(100vh-260px)] overflow-y-auto">
                     {% for item in catalog %}
                     <div id="catalog-row-{{ item.id }}" 
                          onclick="focusHardwareModel('{{ item.id }}')" 
-                         class="catalog-row p-4 hover:bg-slate-50 cursor-pointer transition-colors flex justify-between items-center group">
+                         class="catalog-row p-4 hover:bg-slate-50 rounded-lg cursor-pointer transition-all flex justify-between items-center group border-l-4 border-transparent">
                         <div>
                             <h4 class="font-semibold text-slate-800 text-sm group-hover:text-michigan-blue transition-colors">{{ item.model_name }}</h4>
                             <p class="text-xs text-slate-400 mt-0.5 font-mono">SKU: {{ item.sku }}</p>
@@ -83,7 +83,7 @@
                     {% endfor %}
                 </div>
 
-                <div id="sidebar-locations-list" class="divide-y divide-slate-100 max-h-[calc(100vh-260px)] overflow-y-auto hidden">
+                <div id="sidebar-locations-list" class="space-y-1 p-2 max-h-[calc(100vh-260px)] overflow-y-auto hidden">
                 </div>
             </section>
 
@@ -233,22 +233,34 @@
             const containerNode = document.getElementById('sidebar-locations-list');
             containerNode.innerHTML = '';
 
-            let locations = ['PALLET-04', 'SHELF-B3']; 
-            
-            locations.forEach(loc => {
-                const icon = loc.includes('PALLET') ? '' : '';
-                containerNode.innerHTML += `
-                    <div id="location-row-${loc}" onclick="focusPhysicalLocation('${loc}')" class="location-row p-4 hover:bg-slate-50 cursor-pointer transition-colors flex justify-between items-center group">
-                        <div class="flex items-center space-x-2">
-                            <span class="text-sm">${icon}</span>
-                            <h4 class="font-mono font-bold text-slate-800 text-sm group-hover:text-michigan-blue transition-colors">${loc}</h4>
-                        </div>
-                        <span class="text-xs px-2.5 py-1 bg-slate-100 font-bold rounded-md text-slate-500 uppercase tracking-wider group-hover:bg-michigan-blue group-hover:text-white transition-all">Inspect</span>
-                    </div>`;
-            });
-            
-            const firstLoc = containerNode.querySelector('.location-row');
-            if (firstLoc) firstLoc.click();
+            // Hit our new backend API to pull real-time unique containers from the database
+            fetch('/api/containers/unique')
+                .then(res => res.json())
+                .then(locations => {
+                    if (locations.length === 0) {
+                        containerNode.innerHTML = `<div class="p-4 text-xs text-slate-400 text-center">No active containers found.</div>`;
+                        return;
+                    }
+
+                    locations.forEach(loc => {
+                        // Keep the box icon for pallets, cabinet icon for shelves
+                        const icon = loc.toUpperCase().includes('PALLET') ? '' : '';
+                        containerNode.innerHTML += `
+                            <div id="location-row-${loc}" 
+                                 onclick="focusPhysicalLocation('${loc}')" 
+                                 class="location-row p-4 hover:bg-slate-50 rounded-lg cursor-pointer transition-all flex justify-between items-center group border-l-4 border-transparent">
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-sm">${icon}</span>
+                                    <h4 class="font-mono font-bold text-slate-800 text-sm group-hover:text-michigan-blue transition-colors">${loc}</h4>
+                                </div>
+                                <span class="text-xs px-2.5 py-1 bg-slate-100 font-bold rounded-md text-slate-500 uppercase tracking-wider group-hover:bg-michigan-blue group-hover:text-white transition-all">Inspect</span>
+                            </div>`;
+                    });
+                    
+                    // Auto-click the first container in the list to populate the view layout framework
+                    const firstLoc = containerNode.querySelector('.location-row');
+                    if (firstLoc) firstLoc.click();
+                });
         }
 
         function focusHardwareModel(modelId) {
@@ -263,8 +275,18 @@
             document.getElementById('modal-active-model-id').value = modelId;
             document.getElementById('delete-container-btn').classList.add('hidden');
 
-            document.querySelectorAll('.catalog-row').forEach(el => el.classList.remove('bg-amber-50/60', 'border-l-4', 'border-michigan-maize', 'shadow-xs'));
-            document.getElementById(`catalog-row-${modelId}`).classList.add('bg-amber-50/60', 'border-l-4', 'border-michigan-maize', 'shadow-xs');
+            // Clean up all rows to remove previous active highlight configurations
+            document.querySelectorAll('.catalog-row').forEach(el => {
+                el.classList.remove('bg-amber-50/60', 'border-michigan-maize', 'shadow-xs');
+                el.classList.add('border-transparent');
+            });
+
+            // Apply uniform Maize-Yellow border flag to the actively targeted element row
+            const activeRow = document.getElementById(`catalog-row-${modelId}`);
+            if (activeRow) {
+                activeRow.classList.remove('border-transparent');
+                activeRow.classList.add('bg-amber-50/60', 'border-michigan-maize', 'shadow-xs');
+            }
 
             fetch(`/api/model/${modelId}/locations`)
                 .then(res => res.json())
@@ -320,8 +342,18 @@
             document.getElementById('matrix-grid-title').innerText = "Nested Components Packing Manifest";
             document.getElementById('delete-container-btn').classList.remove('hidden');
 
-            document.querySelectorAll('.location-row').forEach(el => el.classList.remove('bg-amber-50/60', 'border-l-4', 'border-michigan-maize', 'shadow-xs'));
-            document.getElementById(`location-row-${containerId}`).classList.add('bg-amber-50/60', 'border-l-4', 'border-michigan-maize', 'shadow-xs');
+            // Clean up all container row states cleanly 
+            document.querySelectorAll('.location-row').forEach(el => {
+                el.classList.remove('bg-amber-50/60', 'border-michigan-maize', 'shadow-xs');
+                el.classList.add('border-transparent');
+            });
+
+            // Force the matching Maize-Yellow bar highlight to apply here as well
+            const activeLocRow = document.getElementById(`location-row-${containerId}`);
+            if (activeLocRow) {
+                activeLocRow.classList.remove('border-transparent');
+                activeLocRow.classList.add('bg-amber-50/60', 'border-michigan-maize', 'shadow-xs');
+            }
 
             fetch(`/api/container/${containerId}/items`)
                 .then(res => res.json())
