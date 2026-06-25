@@ -7,9 +7,10 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
 
-# Context processor helper to populate initial demo data if database is empty
+# Seed processor utility to safely inject layout matrix blocks if ledger is empty
 def seed_database_if_empty():
     if EquipmentModel.query.count() == 0:
+        print("Database is empty! Re-populating University of Michigan spares matrix nodes...")
         cisco = EquipmentModel(model_name="Cisco Catalyst 9300 48P", sku="CISCO-C9300-48P")
         juniper = EquipmentModel(model_name="Juniper EX3300 24T", sku="JNPR-EX3300-24T")
         
@@ -22,6 +23,7 @@ def seed_database_if_empty():
         
         db.session.add_all([loc1, loc2, loc3])
         db.session.commit()
+        print("Database auto-seeded successfully!")
 
 @app.route('/')
 def dashboard():
@@ -143,6 +145,8 @@ def delete_container(container_id):
 
 if __name__ == '__main__':
     with app.app_context():
+        # Ensure database structure exists on cold boot environments
         db.create_all()
+        # Verify and trigger data populator if tables are empty
         seed_database_if_empty()
     app.run(debug=True, port=5000)
