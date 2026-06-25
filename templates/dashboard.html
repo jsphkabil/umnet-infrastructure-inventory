@@ -234,7 +234,7 @@
             containerNode.innerHTML = '';
 
             // Hit our new backend API to pull real-time unique containers from the database
-            fetch('/api/containers/unique')
+            fetch('/api/containers/unique?t=' + new Date().getTime())
                 .then(res => res.json())
                 .then(locations => {
                     if (locations.length === 0) {
