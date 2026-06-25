@@ -1,64 +1,430 @@
 <!DOCTYPE html>
-<html lang=""en">
+<html lang="en">
 <head>
-    <meta charset=""UTF-8">
-    <title>Spares Room Inventory</title>
-    <style>
-        body { font-family: sans-serif; margin: 40px; background: #f4f6f9; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
-        th, td { padding: 12px; text-align: lef; border-bottom: 1px solid #ddd; }
-        th { background-color: #007bff; color: white; }
-    </style>
-</head>>
-<body>
-    <h1>Spares Room Live Inventory</h1>
-    <div style="background: white; padding: 20px; border-radius: 5px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-        <h3>Add Inventory Item</h3>
-        <form action="/add" method=""POST">
-            <label>Product ID (e.g., EX3300);</label>
-            <input type="text" name="product_id" required placeholder="EX3300">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Spares Master Matrix</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Custom Tailwind configurations to map authentic U-M brand identity specs safely
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        michigan: {
+                            blue: '#00274C',   // Official U-M Signature Deep Blue
+                            maize: '#FFCB05',  // Official U-M Deep Golden Maize Accent
+                            slate: '#1E293B'   // Modern structural gray-blue tint
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-[#f4f7fa] font-sans text-slate-800 antialiased">
 
-            <label>Product Name</label>
-            <label>Product Name:</label>
-            <input type="text" name="product_name" required placeholder="Juniper Switch">
+    <header class="bg-michigan-blue text-white sticky top-0 z-40 shadow-md border-t-4 border-michigan-maize">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <span class="text-2xl text-michigan-maize">🌐</span>
+                <div>
+                    <h1 class="text-lg font-bold tracking-tight text-white">Net Ops Spares Matrix</h1>
+                    <p class="text-xs text-blue-200/70 tracking-wide font-medium">University of Michigan Network Logistics</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button onclick="window.location.reload();" class="px-3 py-1.5 text-xs font-semibold bg-white/10 border border-white/20 rounded-lg hover:bg-white/20 text-white transition-colors">
+                    Sync Ledger
+                </button>
+                <button onclick="toggleModal('add-sku-modal')" class="px-4 py-1.5 text-xs font-bold bg-michigan-maize text-michigan-blue hover:bg-yellow-400 rounded-lg shadow-sm transition-all transform active:scale-95">
+                    Register New Model
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             
-            <label>Storage Unit ID:</label>
-            <input type="text" name="container_id" required placeholder="PALLET-01 or SHELF-A">
-            
-            <label>Storage Type:</label>
-            <select name="container_type">
-                <option value="Pallet">Pallet</option>
-                <option value="Shelf">Shelf</option>
-            </select>
-            
-            <label>Quantity:</label>
-            <input type="number" name="quantity" min="1" required value="1">
-            
-            <button type="submit" style="background: #007bff; color: white; border: none; padding: 8px 15px; cursor: pointer; border-radius: 3px;">
-                Save to Inventory
-            </button>
-        </form>
+            <section class="lg:col-span-5 bg-white rounded-xl border border-slate-200 shadow-md overflow-hidden">
+                
+                <div class="flex border-b border-slate-200 bg-slate-100 p-1.5 space-x-1">
+                    <button id="tab-models" onclick="switchSidebarView('models')" class="w-full text-center py-2 text-xs font-bold rounded-lg transition-all bg-white text-michigan-blue shadow-sm border border-slate-200/50">
+                        View by Model / SKU
+                    </button>
+                    <button id="tab-locations" onclick="switchSidebarView('locations')" class="w-full text-center py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-michigan-blue hover:bg-slate-50">
+                        View by Container
+                    </button>
+                </div>
+
+                <div class="p-4 border-b border-slate-200 bg-slate-50/50">
+                    <input type="text" 
+                           id="catalog-search-input" 
+                           onkeyup="filterSidebarList()" 
+                           placeholder="Search database inventory..." 
+                           class="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-michigan-blue/30 focus:border-michigan-blue transition-all placeholder-slate-400">
+                </div>
+
+                <div id="sidebar-models-list" class="divide-y divide-slate-100 max-h-[calc(100vh-260px)] overflow-y-auto">
+                    {% for item in catalog %}
+                    <div id="catalog-row-{{ item.id }}" 
+                         onclick="focusHardwareModel('{{ item.id }}')" 
+                         class="catalog-row p-4 hover:bg-slate-50 cursor-pointer transition-colors flex justify-between items-center group">
+                        <div>
+                            <h4 class="font-semibold text-slate-800 text-sm group-hover:text-michigan-blue transition-colors">{{ item.model_name }}</h4>
+                            <p class="text-xs text-slate-400 mt-0.5 font-mono">SKU: {{ item.sku }}</p>
+                        </div>
+                        <div class="text-right">
+                            <span id="global-counter-{{ item.id }}" class="text-lg font-black text-slate-700 group-hover:text-michigan-blue transition-colors">{{ item.global_total }}</span>
+                            <p class="text-[10px] uppercase font-bold tracking-wider text-slate-400">Total Pooled</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div id="sidebar-locations-list" class="divide-y divide-slate-100 max-h-[calc(100vh-260px)] overflow-y-auto hidden">
+                </div>
+            </section>
+
+            <section class="lg:col-span-7">
+                
+                <div id="empty-state-panel" class="bg-white rounded-xl border border-slate-200 shadow-md p-12 text-center flex flex-col items-center justify-center space-y-3 hidden">
+                    <span class="text-5xl text-slate-300">📥</span>
+                    <h4 class="font-semibold text-slate-700">No Target Element Selected</h4>
+                    <p class="text-xs text-slate-400 max-w-xs mx-auto">Select a functional model index profile or container block from the left panel matrix framework to modify localized network assets.</p>
+                </div>
+
+                <div id="active-management-panel" class="bg-white rounded-xl border border-slate-200 shadow-md p-6">
+                    <div class="border-b border-slate-100 pb-4 mb-4">
+                        <span id="target-view-context-badge" class="text-xs font-bold uppercase tracking-widest text-michigan-blue/80 bg-slate-100 px-2 py-0.5 rounded font-mono">Target Profile</span>
+                        <h2 id="target-display-name" class="text-2xl font-black text-michigan-blue mt-1.5">---</h2>
+                        <div class="flex items-center justify-between mt-3 text-sm text-slate-500">
+                            <div class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">System Inventory Load: <span id="target-display-count" class="font-extrabold text-michigan-blue">0</span> units total</div>
+                            <button id="delete-container-btn" 
+                                    onclick="triggerContainerClearout()" 
+                                    class="hidden text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-2 rounded-lg transition-all shadow-xs">
+                                Delete Container & Empty Contents
+                            </button>
+                        </div>
+                    </div>
+
+                    <h3 id="matrix-grid-title" class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Distribution Matrix</h3>
+                    
+                    <div id="dynamic-grid-cards-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    </div>
+
+                    <div id="location-assignment-footer" class="mt-6 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div class="text-xs text-slate-400 max-w-sm">
+                        </div>
+                        <button onclick="toggleModal('assign-location-modal')" class="w-full sm:w-auto text-xs px-4 py-2.5 font-bold text-michigan-blue bg-amber-50 hover:bg-michigan-maize/20 border border-michigan-maize rounded-lg transition-all whitespace-nowrap shadow-xs">
+                            Assign to Another Pallet / Shelf
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <div id="add-sku-modal" class="fixed inset-0 z-50 overflow-y-auto hidden">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-michigan-blue/40 backdrop-blur-xs" onclick="toggleModal('add-sku-modal')"></div>
+            <div class="inline-block bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-md sm:w-full border border-slate-200 z-10">
+                <form action="/catalog/add" method="POST">
+                    <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                        <h3 class="font-bold text-michigan-blue text-sm uppercase tracking-wide">Register Asset Model SKU</h3>
+                        <button type="button" onclick="toggleModal('add-sku-modal')" class="text-slate-400 hover:text-slate-600 text-lg">×</button>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Equipment Platform Model Name</label>
+                            <input type="text" name="model_name" placeholder="e.g. Cisco ISR 4451 Router" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Unique Component Part Number / SKU</label>
+                            <input type="text" name="sku" placeholder="e.g. ISR4451-X/K9" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none font-mono">
+                        </div>
+                    </div>
+                    <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end space-x-2">
+                        <button type="button" onclick="toggleModal('add-sku-modal')" class="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
+                        <button type="submit" class="px-4 py-2 text-xs font-bold text-michigan-blue bg-michigan-maize rounded-lg hover:bg-yellow-400 shadow-sm">Commit SKU to Database</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
-    <table>
-        <thead>
-            <tr>
-                <th>Equipment Name</th>
-                <th>Storage Unit </th>
-                <th>Type</th>
-                <th>Quantity</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in inventory %}
-            <tr>
-                <td>{{ item.name }}</td>
-                <td>{{ item.container }}</td>
-                <td>{{ item.type}}</td>
-                <td><strong>{{ item.quantity }}</strong></td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
 
+    <div id="assign-location-modal" class="fixed inset-0 z-50 overflow-y-auto hidden">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-michigan-blue/40 backdrop-blur-xs" onclick="toggleModal('assign-location-modal')"></div>
+            <div class="inline-block bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-md sm:w-full border border-slate-200 z-10">
+                <form action="/location/assign" method="POST">
+                    <input type="hidden" id="modal-active-model-id" name="active_model_id" value="">
+                    
+                    <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                        <h3 class="font-bold text-michigan-blue text-sm uppercase tracking-wide">Assign Routing Destination</h3>
+                        <button type="button" onclick="toggleModal('assign-location-modal')" class="text-slate-400 hover:text-slate-600 text-lg">×</button>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Target Storage Node ID</label>
+                            <input type="text" name="container_id" placeholder="e.g. PALLET-09 or SHELF-C1" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none font-mono">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Container Profile</label>
+                                <select name="container_type" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none">
+                                    <option value="Pallet Array">Pallet Array</option>
+                                    <option value="Storage Shelf">Storage Shelf</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Initial Unit Count Drop</label>
+                                <input type="number" name="initial_qty" min="0" value="1" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end space-x-2">
+                        <button type="button" onclick="toggleModal('assign-location-modal')" class="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
+                        <button type="submit" class="px-4 py-2 text-xs font-bold text-michigan-blue bg-michigan-maize rounded-lg hover:bg-yellow-400 shadow-sm">Instantiate Container Card</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let activeSidebarViewMode = 'models';
+        let currentFocusedModelId = null;
+        let currentFocusedLocationId = null;
+
+        function toggleModal(modalId) {
+            document.getElementById(modalId).classList.toggle('hidden');
+        }
+
+        function switchSidebarView(mode) {
+            activeSidebarViewMode = mode;
+            document.getElementById('catalog-search-input').value = '';
+            
+            const btnModels = document.getElementById('tab-models');
+            const btnLocations = document.getElementById('tab-locations');
+            const listModels = document.getElementById('sidebar-models-list');
+            const listLocations = document.getElementById('sidebar-locations-list');
+
+            if (mode === 'models') {
+                btnModels.className = "w-full text-center py-2 text-xs font-bold rounded-lg transition-all bg-white text-michigan-blue shadow-sm border border-slate-200/50";
+                btnLocations.className = "w-full text-center py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-michigan-blue hover:bg-slate-50";
+                listModels.classList.remove('hidden');
+                listLocations.classList.add('hidden');
+                
+                const firstItem = listModels.querySelector('.catalog-row');
+                if (firstItem) firstItem.click();
+            } else {
+                btnLocations.className = "w-full text-center py-2 text-xs font-bold rounded-lg transition-all bg-white text-michigan-blue shadow-sm border border-slate-200/50";
+                btnModels.className = "w-full text-center py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-michigan-blue hover:bg-slate-50";
+                listLocations.classList.remove('hidden');
+                listModels.classList.add('hidden');
+                
+                rebuildLocationSidebarTree();
+            }
+        }
+
+        function rebuildLocationSidebarTree() {
+            const containerNode = document.getElementById('sidebar-locations-list');
+            containerNode.innerHTML = '';
+
+            let locations = ['PALLET-04', 'SHELF-B3']; 
+            
+            locations.forEach(loc => {
+                const icon = loc.includes('PALLET') ? '' : '';
+                containerNode.innerHTML += `
+                    <div id="location-row-${loc}" onclick="focusPhysicalLocation('${loc}')" class="location-row p-4 hover:bg-slate-50 cursor-pointer transition-colors flex justify-between items-center group">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm">${icon}</span>
+                            <h4 class="font-mono font-bold text-slate-800 text-sm group-hover:text-michigan-blue transition-colors">${loc}</h4>
+                        </div>
+                        <span class="text-xs px-2.5 py-1 bg-slate-100 font-bold rounded-md text-slate-500 uppercase tracking-wider group-hover:bg-michigan-blue group-hover:text-white transition-all">Inspect</span>
+                    </div>`;
+            });
+            
+            const firstLoc = containerNode.querySelector('.location-row');
+            if (firstLoc) firstLoc.click();
+        }
+
+        function focusHardwareModel(modelId) {
+            if (activeSidebarViewMode !== 'models') return;
+            currentFocusedModelId = modelId;
+            
+            document.getElementById('empty-state-panel').classList.add('hidden');
+            document.getElementById('active-management-panel').classList.remove('hidden');
+            document.getElementById('location-assignment-footer').classList.remove('hidden');
+            document.getElementById('target-view-context-badge').innerText = "Target Profile";
+            document.getElementById('matrix-grid-title').innerText = "Distribution Matrix";
+            document.getElementById('modal-active-model-id').value = modelId;
+            document.getElementById('delete-container-btn').classList.add('hidden');
+
+            document.querySelectorAll('.catalog-row').forEach(el => el.classList.remove('bg-amber-50/60', 'border-l-4', 'border-michigan-maize', 'shadow-xs'));
+            document.getElementById(`catalog-row-${modelId}`).classList.add('bg-amber-50/60', 'border-l-4', 'border-michigan-maize', 'shadow-xs');
+
+            fetch(`/api/model/${modelId}/locations`)
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('target-display-name').innerText = data.model_name;
+                    document.getElementById('target-display-count').innerText = data.global_total;
+                    
+                    const grid = document.getElementById('dynamic-grid-cards-container');
+                    grid.innerHTML = '';
+                    
+                    if (data.allocations.length === 0) {
+                        grid.innerHTML = `<div class="col-span-full p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-lg border border-dashed border-slate-200">This hardware platform isn't staged anywhere right now. Assign a storage node below.</div>`;
+                        return;
+                    }
+
+                    data.allocations.forEach(alloc => {
+                        // Fixed: Correctly outputs your customized blue/yellow variables into the layout generator template string
+                        const badgeStyle = alloc.container_type === 'Pallet Array' 
+                            ? 'bg-michigan-maize text-michigan-blue border border-amber-400'
+                            : 'bg-michigan-blue text-white';
+
+                        const typeLabel = alloc.container_type === 'Pallet Array' ? 'Pallet' : 'Shelf';
+                        
+                        grid.innerHTML += `
+                            <div class="border border-slate-200 rounded-xl p-4 bg-white shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <span class="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${badgeStyle} rounded">${typeLabel}</span>
+                                        <h4 class="font-mono font-bold text-slate-900 text-base mt-1.5">${alloc.container_id}</h4>
+                                    </div>
+                                    <div class="text-right">
+                                        <span id="card-qty-${alloc.id}" class="text-2xl font-black text-michigan-blue">${alloc.quantity}</span>
+                                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Staged Units</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center space-x-1 border border-slate-200 bg-slate-50 rounded-lg p-1">
+                                    <button type="button" onclick="modifyQty(${alloc.id}, -1)" class="w-8 h-8 font-black bg-white hover:bg-slate-200 text-slate-700 rounded-md select-none border border-slate-200 transition-colors">-</button>
+                                    <input id="input-qty-${alloc.id}" type="number" readonly value="${alloc.quantity}" class="w-full text-center text-sm font-extrabold bg-transparent border-none outline-none text-slate-800">
+                                    <button type="button" onclick="modifyQty(${alloc.id}, 1)" class="w-8 h-8 font-black bg-white hover:bg-slate-200 text-slate-700 rounded-md select-none border border-slate-200 transition-colors">+</button>
+                                </div>
+                            </div>`;
+                    });
+                });
+        }
+
+        function focusPhysicalLocation(containerId) {
+            currentFocusedLocationId = containerId;
+            
+            document.getElementById('empty-state-panel').classList.add('hidden');
+            document.getElementById('active-management-panel').classList.remove('hidden');
+            document.getElementById('location-assignment-footer').classList.add('hidden'); 
+            document.getElementById('target-view-context-badge').innerText = "Inspecting Container";
+            document.getElementById('matrix-grid-title').innerText = "Nested Components Packing Manifest";
+            document.getElementById('delete-container-btn').classList.remove('hidden');
+
+            document.querySelectorAll('.location-row').forEach(el => el.classList.remove('bg-amber-50/60', 'border-l-4', 'border-michigan-maize', 'shadow-xs'));
+            document.getElementById(`location-row-${containerId}`).classList.add('bg-amber-50/60', 'border-l-4', 'border-michigan-maize', 'shadow-xs');
+
+            fetch(`/api/container/${containerId}/items`)
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('target-display-name').innerText = "Container ID: " + data.container_id;
+                    document.getElementById('target-display-count').innerText = data.total_items;
+                    
+                    const grid = document.getElementById('dynamic-grid-cards-container');
+                    grid.innerHTML = '';
+                    
+                    if (data.items.length === 0) {
+                        grid.innerHTML = `<div class="col-span-full p-12 text-center text-xs text-slate-400 bg-slate-50 border border-dashed rounded-xl">This storage layout node contains zero tracked hardware models. Completely clear.</div>`;
+                        return;
+                    }
+
+                    data.items.forEach(item => {
+                        grid.innerHTML += `
+                            <div class="border border-slate-200 rounded-xl p-4 bg-white shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4">
+                                <div class="flex justify-between items-start">
+                                    <div class="max-w-[75%]">
+                                        <h4 class="font-bold text-slate-900 text-sm leading-tight">${item.model_name}</h4>
+                                        <p class="text-xs text-slate-400 font-mono mt-1">PN: ${item.sku}</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <span id="card-qty-${item.alloc_id}" class="text-2xl font-black text-michigan-blue">${item.quantity}</span>
+                                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Staged Here</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center space-x-1 border border-slate-200 bg-slate-50 rounded-lg p-1">
+                                    <button type="button" onclick="modifyQty(${item.alloc_id}, -1)" class="w-8 h-8 font-black bg-white hover:bg-slate-200 text-slate-700 rounded-md select-none border border-slate-200 transition-colors">-</button>
+                                    <input id="input-qty-${item.alloc_id}" type="number" readonly value="${item.quantity}" class="w-full text-center text-sm font-extrabold bg-transparent border-none outline-none text-slate-800">
+                                    <button type="button" onclick="modifyQty(${item.alloc_id}, 1)" class="w-8 h-8 font-black bg-white hover:bg-slate-200 text-slate-700 rounded-md select-none border border-slate-200 transition-colors">+</button>
+                                </div>
+                            </div>`;
+                    });
+                });
+        }
+
+        function triggerContainerClearout() {
+            if (!currentFocusedLocationId) return;
+            
+            const confirmClear = confirm(`Are you absolutely sure you want to delete ${currentFocusedLocationId}? This will completely remove all network items currently assigned to it from your warehouse counts.`);
+            
+            if (confirmClear) {
+                fetch(`/api/container/${currentFocusedLocationId}/delete`, {
+                    method: 'POST'
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message);
+                        window.location.reload();
+                    } else {
+                        alert("Error during clearout: " + data.error);
+                    }
+                });
+            }
+        }
+
+        function modifyQty(allocId, shiftAmount) {
+            const inputField = document.getElementById(`input-qty-${allocId}`);
+            let targetValue = parseInt(inputField.value) + shiftAmount;
+            if (targetValue < 0) return;
+            
+            fetch(`/api/allocation/${allocId}/update`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ quantity: targetValue })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    inputField.value = targetValue;
+                    document.getElementById(`card-qty-${allocId}`).innerText = targetValue;
+                    
+                    if (activeSidebarViewMode === 'models') {
+                        document.getElementById('target-display-count').innerText = data.new_global_total;
+                        document.getElementById(`global-counter-${currentFocusedModelId}`).innerText = data.new_global_total;
+                    } else {
+                        fetch(`/api/container/${currentFocusedLocationId}/items`)
+                            .then(res => res.json())
+                            .then(cData => {
+                                document.getElementById('target-display-count').innerText = cData.total_items;
+                            });
+                    }
+                }
+            });
+        }
+
+        function filterSidebarList() {
+            const query = document.getElementById('catalog-search-input').value.toLowerCase().trim();
+            const targetSelectorClass = activeSidebarViewMode === 'models' ? '.catalog-row' : '.location-row';
+            
+            document.querySelectorAll(targetSelectorClass).forEach(row => {
+                const checkStringText = row.innerText.toLowerCase();
+                row.style.display = checkStringText.includes(query) ? "" : "none";
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const firstRow = document.querySelector('.catalog-row');
+            if (firstRow) firstRow.click();
+        });
+    </script>
 </body>
 </html>

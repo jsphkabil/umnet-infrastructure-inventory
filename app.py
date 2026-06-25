@@ -1,73 +1,148 @@
-from flask import Flask, render_template, request, redirect
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, render_template, request, redirect, url_for, jsonify
+from models import db, EquipmentModel, PhysicalAllocation
 
 app = Flask(__name__)
-# This creates a local database file called 'inventory.db'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///inventory.db'
-db = SQLAlchemy(app)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///netinfra_warehouse.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-### Data models
-class Product(db.Model):
-    id = db.Column(db.String(50), primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
+db.init_app(app)
 
-class StorageContainer(db.Model):
-    id = db.Column(db.String(50), primary_key=True)
-    type = db.Column(db.String(20)) # Shelf or Pallet
-    status = db.Column(db.String(20), default='In Room') # 'In Room' or 'Shipped'
+# Context processor helper to populate initial demo data if database is empty
+def seed_database_if_empty():
+    if EquipmentModel.query.count() == 0:
+        cisco = EquipmentModel(model_name="Cisco Catalyst 9300 48P", sku="CISCO-C9300-48P")
+        juniper = EquipmentModel(model_name="Juniper EX3300 24T", sku="JNPR-EX3300-24T")
+        
+        db.session.add_all([cisco, juniper])
+        db.session.commit()
+        
+        loc1 = PhysicalAllocation(model_id=cisco.id, container_id="PALLET-04", container_type="Pallet Array", quantity=40)
+        loc2 = PhysicalAllocation(model_id=cisco.id, container_id="SHELF-B3", container_type="Storage Shelf", quantity=12)
+        loc3 = PhysicalAllocation(model_id=juniper.id, container_id="SHELF-B3", container_type="Storage Shelf", quantity=12)
+        
+        db.session.add_all([loc1, loc2, loc3])
+        db.session.commit()
 
-class InventoryLog(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    product_id = db.Column(db.String(50), db.ForeignKey('product.id'))
-    container_id = db.Column(db.String(50), db.ForeignKey('storage_container.id'))
-    quantity = db.Column(db.Integer, nullable=False)
-
-### Controller (routes)
 @app.route('/')
 def dashboard():
-    # Fetch all items where status is 'In Room'
-    active_inventory = db.session.query(
-        Product.name,
-        StorageContainer.id.label('container'),
-        StorageContainer.type,
-        InventoryLog.quantity
-    ).join(InventoryLog, Product.id == InventoryLog.product_id)\
-    .join(StorageContainer, InventoryLog.container_id == StorageContainer.id)\
-    .filter(StorageContainer.status == 'In Room').all()
+    # Fetch all equipment models to populate the global catalog list view
+    catalog = EquipmentModel.query.all()
+    
+    # Target the first item by default if data exists
+    selected_model = catalog[0] if catalog else None
+    return render_template('dashboard.html', catalog=catalog, selected_model=selected_model)
 
-    # Render frontend HTML file and pass database data into it
-    return render_template('dashboard.html', inventory=active_inventory)
 
-@app.route('/add', methods=['POST'])
-def add_inventory():
-    #Grab data out of the HTML form fields
-    p_id = request.form['product_id']
-    p_name = request.form['product_name']
-    c_id = request.form['container_id']
-    c_type = request.form['container_type']
-    qty = int(request.form['quantity'])
+@app.route('/api/model/<int:model_id>/locations', methods=['GET'])
+def get_model_locations(model_id):
+    """API endpoint triggered when a user clicks a catalog item on the left."""
+    model = EquipmentModel.query.get_or_404(model_id)
+    allocations = [{
+        'id': alloc.id,
+        'container_id': alloc.container_id,
+        'container_type': alloc.container_type,
+        'quantity': alloc.quantity
+    } for alloc in model.allocations]
+    
+    return jsonify({
+        'model_name': model.model_name,
+        'global_total': model.global_total,
+        'allocations': allocations
+    })
 
-    # Check if product exists
-    product = Product.query.get(p_id)
-    if not product:
-        product = Product(id=p_id, name=p_name)
-        db.session.add(product)
 
-    # Check if container exists
-    container = StorageContainer(id=c_id, type=c_type)
-    if not container:
-        container = StorageContainer(id=c_id, type=c_type, status='In Room')
-        db.session.add(container)
+@app.route('/api/allocation/<int:alloc_id>/update', methods=['POST'])
+def update_quantity(alloc_id):
+    """API endpoint triggered by the direct inline +/- counter buttons."""
+    data = request.get_json()
+    new_qty = data.get('quantity')
+    
+    allocation = PhysicalAllocation.query.get_or_404(alloc_id)
+    if new_qty is not None and new_qty >= 0:
+        allocation.quantity = int(new_qty)
+        db.session.commit()
+        return jsonify({'success': True, 'new_global_total': allocation.hardware_profile.global_total})
+    
+    return jsonify({'success': False, 'error': 'Invalid quantity balance value'}), 400
 
-    # Create inventory linkage log entry
-    log_entry = InventoryLog(product_id=p_id, container_id=c_id, quantity=qty)
-    db.session.add(log_entry)
 
-    db.session.commit()
+@app.route('/catalog/add', methods=['POST'])
+def add_new_sku():
+    """Form processing to register a new physical hardware asset master type."""
+    name = request.form.get('model_name')
+    sku = request.form.get('sku')
+    
+    if name and sku:
+        new_model = EquipmentModel(model_name=name, sku=sku)
+        db.session.add(new_model)
+        db.session.commit()
+        
+    return redirect(url_for('dashboard'))
 
-    return redirect('/')
 
-if __name__ == "__main__":
+@app.route('/location/assign', methods=['POST'])
+def assign_routing_destination():
+    """Form processing to drop an existing model into a completely new location box."""
+    # We pass the currently active focused model ID from the UI hidden inputs or query strings
+    model_id = request.form.get('active_model_id')
+    container_id = request.form.get('container_id').strip().upper()
+    container_type = request.form.get('container_type')
+    initial_qty = int(request.form.get('initial_qty', 0))
+    
+    if model_id and container_id:
+        # Check if this exact model is already mapped to that container
+        existing = PhysicalAllocation.query.filter_by(model_id=model_id, container_id=container_id).first()
+        if existing:
+            existing.quantity += initial_qty
+        else:
+            new_alloc = PhysicalAllocation(
+                model_id=model_id,
+                container_id=container_id,
+                container_type=container_type,
+                quantity=initial_qty
+            )
+            db.session.add(new_alloc)
+        db.session.commit()
+        
+    return redirect(url_for('dashboard'))
+
+@app.route('/api/container/<container_id>/items', methods=['GET'])
+def get_container_items(container_id):
+    """API endpoint triggered when a user clicks a physical location item in the sidebar."""
+    # Find all allocations assigned to this specific container
+    allocations = PhysicalAllocation.query.filter_by(container_id=container_id).all()
+    
+    item_list = [{
+        'alloc_id': alloc.id,
+        'model_name': alloc.hardware_profile.model_name,
+        'sku': alloc.hardware_profile.sku,
+        'quantity': alloc.quantity
+    } for alloc in allocations]
+    
+    return jsonify({
+        'container_id': container_id,
+        'total_items': sum(item['quantity'] for item in item_list),
+        'items': item_list
+    })
+
+@app.route('/api/container/<container_id>/delete', methods=['POST'])
+def delete_container(container_id):
+    """Deletes an entire location container and clears out all of its nested inventory items."""
+    try:
+        # Find all allocations mapped to this specific pallet/shelf
+        allocations = PhysicalAllocation.query.filter_by(container_id=container_id).all()
+        
+        for alloc in allocations:
+            db.session.delete(alloc)
+            
+        db.session.commit()
+        return jsonify({'success': True, 'message': f'Container {container_id} completely removed from ledger.'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(debug=True)
+        seed_database_if_empty()
+    app.run(debug=True, port=5000)
