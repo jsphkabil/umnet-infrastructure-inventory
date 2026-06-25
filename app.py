@@ -140,6 +140,14 @@ def delete_container(container_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
+    
+@app.route('/api/containers/unique', methods=['GET'])
+def get_unique_containers():
+    """Fetches a real-time list of all unique storage container IDs active in the ledger."""
+    # Queries the database for all unique container IDs, sorted alphabetically
+    records = db.session.query(PhysicalAllocation.container_id).distinct().order_by(PhysicalAllocation.container_id).all()
+    container_ids = [r[0] for r in records]
+    return jsonify(container_ids)
 
 if __name__ == '__main__':
     with app.app_context():
