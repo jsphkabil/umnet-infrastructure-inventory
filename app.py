@@ -141,7 +141,7 @@ def delete_container(container_id):
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
     
-@app.route('/api/model/,int:model_id>/delete', methods=['POST'])
+@app.route('/api/model/<int:model_id>/delete', methods=['POST'])
 def delete_model(model_id):
     """Deletes an equipment model profile and clears out all linked allocations"""
     try:
