@@ -70,9 +70,14 @@ def update_quantity(alloc_id):
 def add_new_sku():
     """Form processing to register a new physical hardware asset master type."""
     name = request.form.get('model_name')
-    sku = request.form.get('sku')
+    sku = request.form.get('sku').strip().upper() if request.form.get('sku') else None
     
     if name and sku:
+        # Check if model exists
+        existing_model = EquipmentModel.query.filter_by(sku=sku).first()
+        if existing_model:
+            return redirect(url_for('dashboard'))
+        
         new_model = EquipmentModel(model_name=name, sku=sku)
         db.session.add(new_model)
         db.session.commit()
