@@ -141,6 +141,23 @@ def delete_container(container_id):
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
     
+@app.roate('/api/model/,int:model_id>/delete', methods=['POST'])
+def delete_model(model_id):
+    """Deletes an equipment model profile and clears out all linked allocations"""
+    try:
+        model = EquipmentModel.query.get_or_404(model_id)
+
+        for alloc in model.allocations:
+            db.session.delete(alloc)
+
+        db.session.delete(model)
+        db.session.commit()
+
+        return jsonify({'success': True, 'message': f'Model profile removed from database.'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    
 @app.route('/api/containers/unique', methods=['GET'])
 def get_unique_containers():
     """Fetches a real-time list of all unique storage container IDs active in the ledger."""

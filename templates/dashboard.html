@@ -106,6 +106,11 @@
                                     class="hidden text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-2 rounded-lg transition-all shadow-xs">
                                 Delete Container & Empty Contents
                             </button>
+                            <button id="delete-model-btn" 
+                                    onclick="triggerModelClearout()" 
+                                    class="hidden text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-2 rounded-lg transition-all shadow-xs">
+                                Delete Model & Empty Contents
+                            </button>
                         </div>
                     </div>
 
@@ -274,6 +279,7 @@
             document.getElementById('matrix-grid-title').innerText = "Distribution Matrix";
             document.getElementById('modal-active-model-id').value = modelId;
             document.getElementById('delete-container-btn').classList.add('hidden');
+            document.getElementById('delete-model-btn').class.remove('hidden');
 
             // Clean up all rows to remove previous active highlight configurations
             document.querySelectorAll('.catalog-row').forEach(el => {
@@ -341,6 +347,7 @@
             document.getElementById('target-view-context-badge').innerText = "Inspecting Container";
             document.getElementById('matrix-grid-title').innerText = "Nested Components Packing Manifest";
             document.getElementById('delete-container-btn').classList.remove('hidden');
+            document.getElementById('delete-model-btn').classList.add('hidden');
 
             // Clean up all container row states cleanly 
             document.querySelectorAll('.location-row').forEach(el => {
@@ -395,7 +402,7 @@
         function triggerContainerClearout() {
             if (!currentFocusedLocationId) return;
             
-            const confirmClear = confirm(`Are you absolutely sure you want to delete ${currentFocusedLocationId}? This will completely remove all network items currently assigned to it from your warehouse counts.`);
+            const confirmClear = confirm("Are you absolutely sure you want to delete ${currentFocusedLocationId}? This will completely remove all network items currently assigned to it from your warehouse counts.");
             
             if (confirmClear) {
                 fetch(`/api/container/${currentFocusedLocationId}/delete`, {
@@ -408,6 +415,27 @@
                         window.location.reload();
                     } else {
                         alert("Error during clearout: " + data.error);
+                    }
+                });
+            }
+        }
+
+        function triggerModelClearout() {
+            if (!currentFocusedLocationId) return;
+
+            const confirmClear = confirm("Are you absolutely sure you want to delete ${currentFocusedModelId}? This will completely remove this hardware model and remove all of its unit tracking allocations")
+
+            if(confirmClear) {
+                fetch('/api/model.${currentFocusedModelId}/delete', {
+                    method: 'POST'
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message)
+                        window.location.reload();
+                    } else {
+                        alert("Error during model removal: " + data.error)
                     }
                 });
             }
