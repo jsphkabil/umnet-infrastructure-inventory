@@ -279,7 +279,7 @@
             document.getElementById('matrix-grid-title').innerText = "Distribution Matrix";
             document.getElementById('modal-active-model-id').value = modelId;
             document.getElementById('delete-container-btn').classList.add('hidden');
-            document.getElementById('delete-model-btn').class.remove('hidden');
+            document.getElementById('delete-model-btn').classList.remove('hidden');
 
             // Clean up all rows to remove previous active highlight configurations
             document.querySelectorAll('.catalog-row').forEach(el => {
@@ -402,7 +402,7 @@
         function triggerContainerClearout() {
             if (!currentFocusedLocationId) return;
             
-            const confirmClear = confirm("Are you absolutely sure you want to delete ${currentFocusedLocationId}? This will completely remove all network items currently assigned to it from your warehouse counts.");
+            const confirmClear = confirm(`Are you absolutely sure you want to delete ${currentFocusedLocationId}? This will completely remove all network items currently assigned to it from your warehouse counts.`);
             
             if (confirmClear) {
                 fetch(`/api/container/${currentFocusedLocationId}/delete`, {
@@ -421,12 +421,12 @@
         }
 
         function triggerModelClearout() {
-            if (!currentFocusedLocationId) return;
+            if (!currentFocusedModelId) return;
 
-            const confirmClear = confirm("Are you absolutely sure you want to delete ${currentFocusedModelId}? This will completely remove this hardware model and remove all of its unit tracking allocations")
+            const confirmClear = confirm(`Are you absolutely sure you want to delete ${currentFocusedModelId}? This will completely remove this hardware model and remove all of its unit tracking allocations`)
 
             if(confirmClear) {
-                fetch('/api/model.${currentFocusedModelId}/delete', {
+                fetch(`/api/model/${currentFocusedModelId}/delete`, {
                     method: 'POST'
                 })
                 .then(res => res.json())
