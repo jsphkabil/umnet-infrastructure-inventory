@@ -1,5 +1,5 @@
 # Net Ops Spares Matric (umnet-infrastructure-inventory)
-Web application designed to track network infrastructure, built specifically for the University of Michigan's ITS Infra Net Dir of Ops. This system maps inventory across physical storage arrays (pallets and shelves) within the departments spares room.
+Web application designed to track network infrastructure, built specifically for the University of Michigan's ITS Infra Net Dir of Ops. This system maps inventory across physical storage arrays (pallets and shelves) within the departments spares room. Sandbox prototype found here: https://umnet-infrastructure-inventory-1.onrender.com/
 
 # Architecture
 - Backend Framework: Python with Flask (RESTful routing engine)
