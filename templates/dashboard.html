@@ -6,15 +6,14 @@
     <title>Network Spares Master Matrix</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        // Custom Tailwind configurations to map authentic U-M brand identity specs safely
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
                         michigan: {
-                            blue: '#00274C',   // Official U-M Signature Deep Blue
-                            maize: '#FFCB05',  // Official U-M Deep Golden Maize Accent
-                            slate: '#1E293B'   // Modern structural gray-blue tint
+                            blue: '#00274C',
+                            maize: '#FFCB05',
+                            slate: '#1E293B'
                         }
                     }
                 }
@@ -22,10 +21,10 @@
         }
     </script>
 </head>
-<body class="bg-[#f4f7fa] font-sans text-slate-800 antialiased">
+<body class="bg-[#f4f7fa] font-sans text-slate-800 antialiased min-h-screen flex flex-col">
 
     <header class="bg-michigan-blue text-white sticky top-0 z-40 shadow-md border-t-4 border-michigan-maize">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div class="max-w-[1800px] w-full mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
             <div class="flex items-center space-x-3">
                 <span class="text-2xl text-michigan-maize">🌐</span>
                 <div>
@@ -34,103 +33,152 @@
                 </div>
             </div>
             <div class="flex items-center space-x-3">
+                <button id="export-sheets-btn" onclick="exportToGoogleSheet()" class="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 border border-emerald-400/30 rounded-lg text-white transition-all flex items-center space-x-1.5 shadow-xs">
+                    <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 7h10v2H7zm0 4h10v2H7zm0 4h7v2H7z"/>
+                    </svg>
+                    <span>Export to Sheet</span>
+                </button>
                 <button onclick="window.location.reload();" class="px-3 py-1.5 text-xs font-semibold bg-white/10 border border-white/20 rounded-lg hover:bg-white/20 text-white transition-colors">
                     Sync Ledger
-                </button>
-                <button onclick="toggleModal('add-sku-modal')" class="px-4 py-1.5 text-xs font-bold bg-michigan-maize text-michigan-blue hover:bg-yellow-400 rounded-lg shadow-sm transition-all transform active:scale-95">
-                    Register New Model
                 </button>
             </div>
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <!-- MAIN BODY -->
+    <main class="max-w-[1800px] w-full mx-auto px-4 sm:px-6 py-6 flex-1">
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             
-            <section class="lg:col-span-5 bg-white rounded-xl border border-slate-200 shadow-md overflow-hidden">
-                
-                <div class="flex border-b border-slate-200 bg-slate-100 p-1.5 space-x-1">
-                    <button id="tab-models" onclick="switchSidebarView('models')" class="w-full text-center py-2 text-xs font-bold rounded-lg transition-all bg-white text-michigan-blue shadow-sm border border-slate-200/50">
+            <!-- LEFT SIDEBAR -->
+            <section class="lg:col-span-4 xl:col-span-3 bg-white rounded-xl border border-slate-200 shadow-md overflow-hidden">
+                <!-- LEVEL 1 HEADER: TABS SWITCHER -->
+                <div class="flex border-b border-slate-200 bg-slate-100 p-1.5 space-x-1 h-12 items-center">
+                    <button id="tab-models" onclick="switchSidebarView('models')" class="w-full h-full text-center py-1.5 text-xs font-bold rounded-lg transition-all bg-white text-michigan-blue shadow-xs border border-slate-200/50 flex items-center justify-center">
                         View by Model / SKU
                     </button>
-                    <button id="tab-locations" onclick="switchSidebarView('locations')" class="w-full text-center py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-michigan-blue hover:bg-slate-50">
+                    <button id="tab-locations" onclick="switchSidebarView('locations')" class="w-full h-full text-center py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-michigan-blue hover:bg-slate-50 flex items-center justify-center">
                         View by Container
                     </button>
                 </div>
 
-                <div class="p-4 border-b border-slate-200 bg-slate-50/50">
-                    <input type="text" 
-                           id="catalog-search-input" 
-                           onkeyup="filterSidebarList()" 
-                           placeholder="Search database inventory..." 
-                           class="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-michigan-blue/30 focus:border-michigan-blue transition-all placeholder-slate-400">
+                <!-- LEVEL 2 HEADER: SEARCH & ACTION BAR (ALIGNED WITH RIGHT PANEL HEADER) -->
+                <div class="p-3 border-b border-slate-200 bg-slate-50/50 min-h-[58px] flex items-center">
+                    <div class="flex items-center space-x-2 w-full">
+                        <input type="text" 
+                               id="catalog-search-input" 
+                               onkeyup="filterSidebarList()" 
+                               placeholder="Search database inventory..." 
+                               class="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-michigan-blue/30 focus:border-michigan-blue transition-all placeholder-slate-400 h-9">
+                        <button id="sidebar-register-model-btn" 
+                                onclick="toggleModal('add-sku-modal')" 
+                                class="shrink-0 h-9 px-3 text-xs font-bold bg-michigan-maize text-michigan-blue hover:bg-yellow-400 rounded-lg shadow-2xs transition-all transform active:scale-95 flex items-center justify-center whitespace-nowrap">
+                            <span>+ New Model</span>
+                        </button>
+                    </div>
                 </div>
 
-                <div id="sidebar-models-list" class="space-y-1 p-2 max-h-[calc(100vh-260px)] overflow-y-auto">
+                <!-- SIDEBAR LIST CONTENT -->
+                <div id="sidebar-models-list" class="space-y-1 p-2 max-h-[calc(100vh-250px)] overflow-y-auto">
                     {% for item in catalog %}
                     <div id="catalog-row-{{ item.id }}" 
                          onclick="focusHardwareModel('{{ item.id }}')" 
-                         class="catalog-row p-4 hover:bg-slate-50 rounded-lg cursor-pointer transition-all flex justify-between items-center group border-l-4 border-transparent">
+                         class="catalog-row p-3 hover:bg-slate-50 rounded-lg cursor-pointer transition-all flex justify-between items-center group border-l-4 border-transparent">
                         <div>
-                            <h4 class="font-semibold text-slate-800 text-sm group-hover:text-michigan-blue transition-colors">{{ item.model_name }}</h4>
-                            <p class="text-xs text-slate-400 mt-0.5 font-mono">SKU: {{ item.sku }}</p>
+                            <h4 class="font-semibold text-slate-800 text-xs group-hover:text-michigan-blue transition-colors">{{ item.model_name }}</h4>
+                            <p class="text-[11px] text-slate-400 mt-0.5 font-mono">SKU: {{ item.sku }}</p>
                         </div>
                         <div class="text-right">
-                            <span id="global-counter-{{ item.id }}" class="text-lg font-black text-slate-700 group-hover:text-michigan-blue transition-colors">{{ item.global_total }}</span>
-                            <p class="text-[10px] uppercase font-bold tracking-wider text-slate-400">Total Pooled</p>
+                            <span id="global-counter-{{ item.id }}" class="text-base font-black text-slate-700 group-hover:text-michigan-blue transition-colors">{{ item.global_total }}</span>
+                            <p class="text-[9px] uppercase font-bold tracking-wider text-slate-400">Total Pooled</p>
                         </div>
                     </div>
                     {% endfor %}
                 </div>
 
-                <div id="sidebar-locations-list" class="space-y-1 p-2 max-h-[calc(100vh-260px)] overflow-y-auto hidden">
+                <div id="sidebar-locations-list" class="space-y-1 p-2 max-h-[calc(100vh-250px)] overflow-y-auto hidden">
                 </div>
             </section>
 
-            <section class="lg:col-span-7">
+            <!-- RIGHT MANAGEMENT PANEL -->
+            <section class="lg:col-span-8 xl:col-span-9 space-y-6">
                 
                 <div id="empty-state-panel" class="bg-white rounded-xl border border-slate-200 shadow-md p-12 text-center flex flex-col items-center justify-center space-y-3 hidden">
                     <span class="text-5xl text-slate-300">📥</span>
                     <h4 class="font-semibold text-slate-700">No Target Element Selected</h4>
-                    <p class="text-xs text-slate-400 max-w-xs mx-auto">Select a functional model index profile or container block from the left panel matrix framework to modify localized network assets.</p>
+                    <p class="text-xs text-slate-400 max-w-xs mx-auto">Select a model or container block from the left panel to manage inventory.</p>
                 </div>
 
-                <div id="active-management-panel" class="bg-white rounded-xl border border-slate-200 shadow-md p-6">
-                    <div class="border-b border-slate-100 pb-4 mb-4">
-                        <span id="target-view-context-badge" class="text-xs font-bold uppercase tracking-widest text-michigan-blue/80 bg-slate-100 px-2 py-0.5 rounded font-mono">Target Profile</span>
-                        <h2 id="target-display-name" class="text-2xl font-black text-michigan-blue mt-1.5">---</h2>
-                        <div class="flex items-center justify-between mt-3 text-sm text-slate-500">
-                            <div class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">System Inventory Load: <span id="target-display-count" class="font-extrabold text-michigan-blue">0</span> units total</div>
+                <div id="active-management-panel" class="bg-white rounded-xl border border-slate-200 shadow-md overflow-hidden">
+                    
+                    <!-- LEVEL 1 HEADER: CONTEXT BADGE & ACTIONS BAR -->
+                    <div class="bg-slate-100 border-b border-slate-200 px-4 h-12 flex items-center justify-between">
+                        <span id="target-view-context-badge" class="text-[11px] font-bold uppercase tracking-widest text-michigan-blue/90 bg-white border border-slate-200/80 px-2.5 py-1 rounded-md font-mono shadow-2xs">
+                            Target Profile
+                        </span>
+                        <div class="flex items-center space-x-2">
                             <button id="delete-container-btn" 
                                     onclick="triggerContainerClearout()" 
-                                    class="hidden text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-2 rounded-lg transition-all shadow-xs">
-                                Delete Container & Empty Contents
+                                    class="hidden text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1 rounded-lg transition-all shadow-2xs">
+                                Delete Container & Empty
                             </button>
                             <button id="delete-model-btn" 
                                     onclick="triggerModelClearout()" 
-                                    class="hidden text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-2 rounded-lg transition-all shadow-xs">
-                                Delete Model & Empty Contents
+                                    class="hidden text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1 rounded-lg transition-all shadow-2xs">
+                                Delete Model & Empty
                             </button>
                         </div>
                     </div>
 
-                    <h3 id="matrix-grid-title" class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Distribution Matrix</h3>
-                    
-                    <div id="dynamic-grid-cards-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- LEVEL 2 HEADER: DISPLAY NAME & LOAD COUNTER (EVEN WITH SEARCH BAR) -->
+                    <div class="p-3 px-5 border-b border-slate-100 bg-slate-50/30 min-h-[58px] flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                            <h2 id="target-display-name" class="text-xl font-black text-michigan-blue leading-tight">---</h2>
+                        </div>
+                        <div class="bg-white border border-slate-200 shadow-2xs rounded-lg px-3 py-1 text-xs text-slate-500 font-medium">
+                            System Inventory Load: <span id="target-display-count" class="font-extrabold text-michigan-blue">0</span> units total
+                        </div>
                     </div>
 
-                    <div id="location-assignment-footer" class="mt-6 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <div class="text-xs text-slate-400 max-w-sm">
+                    <!-- MAIN MANAGEMENT PANEL BODY -->
+                    <div class="p-5 sm:p-6 space-y-6">
+                        <div>
+                            <h3 id="matrix-grid-title" class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Distribution Matrix</h3>
+                            
+                            <!-- Dynamic Grid configured for 3 cards per row on medium/large screens -->
+                            <div id="dynamic-grid-cards-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            </div>
                         </div>
-                        <button onclick="toggleModal('assign-location-modal')" class="w-full sm:w-auto text-xs px-4 py-2.5 font-bold text-michigan-blue bg-amber-50 hover:bg-michigan-maize/20 border border-michigan-maize rounded-lg transition-all whitespace-nowrap shadow-xs">
-                            Assign to Another Pallet / Shelf
-                        </button>
+
+                        <!-- SERIAL NUMBERS SECTION -->
+                        <div class="pt-6 border-t border-slate-100">
+                            <div class="flex justify-between items-center mb-3">
+                                <div>
+                                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Registered Serial Numbers</h3>
+                                    <p class="text-[11px] text-slate-400 mt-0.5">Tracked asset barcode records</p>
+                                </div>
+                                <button id="add-serial-btn" onclick="openAddSerialModal()" class="text-xs px-3 py-1.5 font-bold text-michigan-blue bg-amber-50 hover:bg-michigan-maize/30 border border-michigan-maize rounded-lg transition-all">
+                                    + Add Serial Code
+                                </button>
+                            </div>
+                            <div id="serial-list-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2.5 max-h-56 overflow-y-auto p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                                <p class="text-xs text-slate-400 p-3 col-span-full text-center">No serial numbers registered yet.</p>
+                            </div>
+                        </div>
+
+                        <div id="location-assignment-footer" class="pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <div class="text-xs text-slate-400 max-w-sm">Assign this hardware platform to an additional shelf or pallet unit.</div>
+                            <button onclick="toggleModal('assign-location-modal')" class="w-full sm:w-auto text-xs px-4 py-2.5 font-bold text-michigan-blue bg-amber-50 hover:bg-michigan-maize/20 border border-michigan-maize rounded-lg transition-all whitespace-nowrap shadow-xs">
+                                Assign to Another Pallet / Shelf
+                            </button>
+                        </div>
                     </div>
                 </div>
             </section>
         </div>
     </main>
 
+    <!-- MODAL 1: REGISTER SKU -->
     <div id="add-sku-modal" class="fixed inset-0 z-50 overflow-y-auto hidden">
         <div class="flex items-center justify-center min-h-screen px-4">
             <div class="fixed inset-0 bg-michigan-blue/40 backdrop-blur-xs" onclick="toggleModal('add-sku-modal')"></div>
@@ -142,23 +190,24 @@
                     </div>
                     <div class="p-6 space-y-4">
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Equipment Platform Model Name</label>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Equipment Model Name</label>
                             <input type="text" name="model_name" placeholder="e.g. Cisco ISR 4451 Router" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Unique Component Part Number / SKU</label>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Part Number / SKU</label>
                             <input type="text" name="sku" placeholder="e.g. ISR4451-X/K9" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none font-mono">
                         </div>
                     </div>
                     <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end space-x-2">
                         <button type="button" onclick="toggleModal('add-sku-modal')" class="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
-                        <button type="submit" class="px-4 py-2 text-xs font-bold text-michigan-blue bg-michigan-maize rounded-lg hover:bg-yellow-400 shadow-sm">Commit SKU to Database</button>
+                        <button type="submit" class="px-4 py-2 text-xs font-bold text-michigan-blue bg-michigan-maize rounded-lg hover:bg-yellow-400 shadow-sm">Commit SKU</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 
+    <!-- MODAL 2: ASSIGN LOCATION -->
     <div id="assign-location-modal" class="fixed inset-0 z-50 overflow-y-auto hidden">
         <div class="flex items-center justify-center min-h-screen px-4">
             <div class="fixed inset-0 bg-michigan-blue/40 backdrop-blur-xs" onclick="toggleModal('assign-location-modal')"></div>
@@ -172,44 +221,309 @@
                     </div>
                     <div class="p-6 space-y-4">
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Target Storage Node ID</label>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Storage Node ID</label>
                             <input type="text" name="container_id" placeholder="e.g. PALLET-09 or SHELF-C1" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none font-mono">
                         </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Container Profile</label>
-                                <select name="container_type" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none">
-                                    <option value="Pallet Array">Pallet Array</option>
-                                    <option value="Storage Shelf">Storage Shelf</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Initial Unit Count Drop</label>
-                                <input type="number" name="initial_qty" min="0" value="1" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none">
-                            </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Container Type</label>
+                            <select name="container_type" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none">
+                                <option value="Pallet Array">Pallet Array</option>
+                                <option value="Storage Shelf">Storage Shelf</option>
+                            </select>
                         </div>
                     </div>
                     <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end space-x-2">
                         <button type="button" onclick="toggleModal('assign-location-modal')" class="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
-                        <button type="submit" class="px-4 py-2 text-xs font-bold text-michigan-blue bg-michigan-maize rounded-lg hover:bg-yellow-400 shadow-sm">Instantiate Container Card</button>
+                        <button type="submit" class="px-4 py-2 text-xs font-bold text-michigan-blue bg-michigan-maize rounded-lg hover:bg-yellow-400 shadow-sm">Save Container Card</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 
+    <!-- MODAL 3: ADD SERIAL NUMBER -->
+    <div id="add-serial-modal" class="fixed inset-0 z-50 overflow-y-auto hidden">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-michigan-blue/40 backdrop-blur-xs" onclick="toggleModal('add-serial-modal')"></div>
+            <div class="inline-block bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-md sm:w-full border border-slate-200 z-10">
+                <form onsubmit="submitNewSerial(event)">
+                    <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                        <h3 class="font-bold text-michigan-blue text-sm uppercase tracking-wide">Register Serial Code</h3>
+                        <button type="button" onclick="toggleModal('add-serial-modal')" class="text-slate-400 hover:text-slate-600 text-lg">×</button>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Serial Number / Barcode</label>
+                            <input type="text" id="serial-input-code" placeholder="e.g. FOC2341X89L" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Assigned Container Location</label>
+                            <select id="serial-input-location" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none font-mono">
+                            </select>
+                        </div>
+                    </div>
+                    <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end space-x-2">
+                        <button type="button" onclick="toggleModal('add-serial-modal')" class="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
+                        <button type="submit" class="px-4 py-2 text-xs font-bold text-michigan-blue bg-michigan-maize rounded-lg hover:bg-yellow-400 shadow-sm">Save Serial Code</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- CUSTOM UI DIALOG MODAL -->
+    <div id="custom-dialog-modal" class="fixed inset-0 z-50 overflow-y-auto hidden">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-michigan-blue/40 backdrop-blur-xs" id="custom-dialog-backdrop"></div>
+            <div class="inline-block bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-md sm:w-full border border-slate-200 z-10 p-6 space-y-4">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h3 id="custom-dialog-title" class="font-bold text-michigan-blue text-base">Notice</h3>
+                        <p id="custom-dialog-message" class="text-xs text-slate-600 mt-1"></p>
+                    </div>
+                </div>
+                <div id="custom-dialog-input-container" class="hidden">
+                    <label id="custom-dialog-input-label" class="block text-xs font-bold text-slate-500 uppercase mb-1">Input</label>
+                    <input type="text" id="custom-dialog-input" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none font-mono">
+                </div>
+                <div id="custom-dialog-select-container" class="hidden">
+                    <label id="custom-dialog-select-label" class="block text-xs font-bold text-slate-500 uppercase mb-1">Select Serial to Remove</label>
+                    <select id="custom-dialog-select" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none font-mono">
+                    </select>
+                </div>
+                <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+                    <button id="custom-dialog-cancel-btn" type="button" class="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hidden">Cancel</button>
+                    <button id="custom-dialog-confirm-btn" type="button" class="px-4 py-2 text-xs font-bold text-michigan-blue bg-michigan-maize rounded-lg hover:bg-yellow-400 shadow-sm">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION CONTAINER -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+    <!-- JAVASCRIPT LOGIC -->
     <script>
         let activeSidebarViewMode = 'models';
         let currentFocusedModelId = null;
         let currentFocusedLocationId = null;
 
         function toggleModal(modalId) {
-            document.getElementById(modalId).classList.toggle('hidden');
+            const modal = document.getElementById(modalId);
+            if (modal) modal.classList.toggle('hidden');
+        }
+
+        function updateRegisterBtnVisibility() {
+            const btn = document.getElementById('sidebar-register-model-btn');
+            if (!btn) return;
+            if (activeSidebarViewMode === 'models') {
+                btn.classList.remove('hidden');
+            } else {
+                btn.classList.add('hidden');
+            }
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            const bgClass = type === 'error' ? 'bg-red-900 text-white border-red-700' : 
+                            type === 'warning' ? 'bg-amber-800 text-white border-amber-600' : 
+                            'bg-michigan-blue text-white border-blue-900';
+
+            toast.className = `pointer-events-auto px-4 py-3 rounded-lg shadow-lg border text-xs font-semibold flex items-center space-x-2 transition-all transform translate-y-2 opacity-0 ${bgClass}`;
+            toast.innerHTML = `<span>${message}</span>`;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        function showCustomDialog(options) {
+            return new Promise((resolve) => {
+                const modal = document.getElementById('custom-dialog-modal');
+                const titleEl = document.getElementById('custom-dialog-title');
+                const msgEl = document.getElementById('custom-dialog-message');
+                const inputContainer = document.getElementById('custom-dialog-input-container');
+                const inputLabel = document.getElementById('custom-dialog-input-label');
+                const inputEl = document.getElementById('custom-dialog-input');
+                const selectContainer = document.getElementById('custom-dialog-select-container');
+                const selectEl = document.getElementById('custom-dialog-select');
+                const cancelBtn = document.getElementById('custom-dialog-cancel-btn');
+                const confirmBtn = document.getElementById('custom-dialog-confirm-btn');
+
+                titleEl.innerText = options.title || 'Notification';
+                msgEl.innerText = options.message || '';
+
+                if (options.hasInput) {
+                    inputContainer.classList.remove('hidden');
+                    inputLabel.innerText = options.inputLabel || 'Input Value';
+                    inputEl.value = options.defaultValue || '';
+                } else {
+                    inputContainer.classList.add('hidden');
+                }
+
+                if (options.optionsList && options.optionsList.length > 0) {
+                    selectContainer.classList.remove('hidden');
+                    selectEl.innerHTML = '';
+                    options.optionsList.forEach(opt => {
+                        const optEl = document.createElement('option');
+                        optEl.value = opt.value;
+                        optEl.textContent = opt.label;
+                        selectEl.appendChild(optEl);
+                    });
+                } else {
+                    selectContainer.classList.add('hidden');
+                }
+
+                if (options.showCancel) {
+                    cancelBtn.classList.remove('hidden');
+                } else {
+                    cancelBtn.classList.add('hidden');
+                }
+
+                modal.classList.remove('hidden');
+
+                const cleanup = () => {
+                    modal.classList.add('hidden');
+                    confirmBtn.onclick = null;
+                    cancelBtn.onclick = null;
+                };
+
+                confirmBtn.onclick = () => {
+                    cleanup();
+                    if (options.optionsList && options.optionsList.length > 0) {
+                        resolve(selectEl.value);
+                    } else if (options.hasInput) {
+                        resolve(inputEl.value);
+                    } else {
+                        resolve(true);
+                    }
+                };
+
+                cancelBtn.onclick = () => {
+                    cleanup();
+                    resolve(null);
+                };
+            });
+        }
+
+        function openAddSerialModal() {
+            if (!currentFocusedModelId) {
+                showToast("Please select a hardware model first.", "warning");
+                return;
+            }
+
+            fetch(`/api/model/${currentFocusedModelId}/locations`)
+                .then(res => res.json())
+                .then(data => {
+                    const selectEl = document.getElementById('serial-input-location');
+                    if (selectEl) {
+                        selectEl.innerHTML = '';
+                        if (!data.allocations || data.allocations.length === 0) {
+                            selectEl.innerHTML = `<option value="">No active containers assigned to this model</option>`;
+                        } else {
+                            data.allocations.forEach(alloc => {
+                                selectEl.innerHTML += `<option value="${alloc.id}">${alloc.container_id} (${alloc.container_type})</option>`;
+                            });
+                        }
+                    }
+                    toggleModal('add-serial-modal');
+                })
+                .catch(() => showToast("Error loading container locations.", "error"));
+        }
+
+        let serialSearchDebounce = null;
+
+        function filterSidebarList() {
+            updateRegisterBtnVisibility();
+            const rawQuery = document.getElementById('catalog-search-input').value;
+            const query = rawQuery.toLowerCase().trim();
+            
+            let searchResultsContainer = document.getElementById('serial-search-results');
+            if (!searchResultsContainer) {
+                searchResultsContainer = document.createElement('div');
+                searchResultsContainer.id = 'serial-search-results';
+                searchResultsContainer.className = 'mt-2 space-y-1 border-t border-slate-200 pt-2';
+                document.getElementById('catalog-search-input').parentNode.parentNode.appendChild(searchResultsContainer);
+            }
+            searchResultsContainer.innerHTML = '';
+
+            const selector = activeSidebarViewMode === 'models' ? '.catalog-row' : '.location-row';
+            document.querySelectorAll(selector).forEach(row => {
+                const text = row.innerText.toLowerCase();
+                row.style.display = text.includes(query) ? '' : 'none';
+            });
+
+            if (activeSidebarViewMode === 'models' && query.length >= 2) {
+                clearTimeout(serialSearchDebounce);
+                serialSearchDebounce = setTimeout(() => {
+                    fetch(`/api/serials/search?q=${encodeURIComponent(query)}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success && data.results.length > 0) {
+                                searchResultsContainer.innerHTML = `<p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 my-1">Matched Serials (${data.results.length})</p>`;
+                                
+                                data.results.forEach(res => {
+                                    const badgeStyle = res.container_type === 'Pallet Array'
+                                        ? 'bg-michigan-maize text-michigan-blue border border-amber-400'
+                                        : (res.container_type ? 'bg-michigan-blue text-white' : 'bg-slate-100 text-slate-500');
+
+                                    searchResultsContainer.innerHTML += `
+                                        <div onclick="selectModelFromSerial('${res.model_id}', '${res.serial_code}')" 
+                                            class="p-2 hover:bg-amber-50 rounded-lg cursor-pointer transition-all border border-slate-200 bg-white shadow-2xs flex justify-between items-center group">
+                                            <div class="truncate pr-1">
+                                                <span class="font-mono text-xs font-bold text-michigan-blue block truncate">${res.serial_code}</span>
+                                                <span class="text-[10px] text-slate-500 block truncate">${res.model_name}</span>
+                                            </div>
+                                            <span class="px-1.5 py-0.5 text-[9px] font-mono font-bold ${badgeStyle} rounded shrink-0">
+                                                ${res.container_id}
+                                            </span>
+                                        </div>`;
+                                });
+                            }
+                        })
+                        .catch(err => console.error(err));
+                }, 250);
+            }
+        }
+
+        function selectModelFromSerial(modelId, serialCode) {
+            activeSidebarViewMode = 'models';
+            
+            const btnModels = document.getElementById('tab-models');
+            const btnLocations = document.getElementById('tab-locations');
+            const listModels = document.getElementById('sidebar-models-list');
+            const listLocations = document.getElementById('sidebar-locations-list');
+
+            if (btnModels && btnLocations) {
+                btnModels.className = "w-full h-full text-center py-1.5 text-xs font-bold rounded-lg transition-all bg-white text-michigan-blue shadow-xs border border-slate-200/50 flex items-center justify-center";
+                btnLocations.className = "w-full h-full text-center py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-michigan-blue hover:bg-slate-50 flex items-center justify-center";
+            }
+            if (listModels && listLocations) {
+                listModels.classList.remove('hidden');
+                listLocations.classList.add('hidden');
+            }
+
+            focusHardwareModel(modelId);
+            document.getElementById('catalog-search-input').value = serialCode;
         }
 
         function switchSidebarView(mode) {
             activeSidebarViewMode = mode;
             document.getElementById('catalog-search-input').value = '';
+            updateRegisterBtnVisibility();
+            
+            const searchResultsContainer = document.getElementById('serial-search-results');
+            if (searchResultsContainer) searchResultsContainer.innerHTML = '';
             
             const btnModels = document.getElementById('tab-models');
             const btnLocations = document.getElementById('tab-locations');
@@ -217,16 +531,16 @@
             const listLocations = document.getElementById('sidebar-locations-list');
 
             if (mode === 'models') {
-                btnModels.className = "w-full text-center py-2 text-xs font-bold rounded-lg transition-all bg-white text-michigan-blue shadow-sm border border-slate-200/50";
-                btnLocations.className = "w-full text-center py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-michigan-blue hover:bg-slate-50";
+                btnModels.className = "w-full h-full text-center py-1.5 text-xs font-bold rounded-lg transition-all bg-white text-michigan-blue shadow-xs border border-slate-200/50 flex items-center justify-center";
+                btnLocations.className = "w-full h-full text-center py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-michigan-blue hover:bg-slate-50 flex items-center justify-center";
                 listModels.classList.remove('hidden');
                 listLocations.classList.add('hidden');
                 
                 const firstItem = listModels.querySelector('.catalog-row');
                 if (firstItem) firstItem.click();
             } else {
-                btnLocations.className = "w-full text-center py-2 text-xs font-bold rounded-lg transition-all bg-white text-michigan-blue shadow-sm border border-slate-200/50";
-                btnModels.className = "w-full text-center py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-michigan-blue hover:bg-slate-50";
+                btnLocations.className = "w-full h-full text-center py-1.5 text-xs font-bold rounded-lg transition-all bg-white text-michigan-blue shadow-xs border border-slate-200/50 flex items-center justify-center";
+                btnModels.className = "w-full h-full text-center py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-michigan-blue hover:bg-slate-50 flex items-center justify-center";
                 listLocations.classList.remove('hidden');
                 listModels.classList.add('hidden');
                 
@@ -238,39 +552,36 @@
             const containerNode = document.getElementById('sidebar-locations-list');
             containerNode.innerHTML = '';
 
-            // Hit our new backend API to pull real-time unique containers from the database
             fetch('/api/containers/unique?t=' + new Date().getTime())
                 .then(res => res.json())
                 .then(locations => {
-                    if (locations.length === 0) {
+                    if (!locations || locations.length === 0) {
                         containerNode.innerHTML = `<div class="p-4 text-xs text-slate-400 text-center">No active containers found.</div>`;
                         return;
                     }
 
                     locations.forEach(loc => {
-                        // Keep the box icon for pallets, cabinet icon for shelves
-                        const icon = loc.toUpperCase().includes('PALLET') ? '' : '';
                         containerNode.innerHTML += `
                             <div id="location-row-${loc}" 
                                  onclick="focusPhysicalLocation('${loc}')" 
-                                 class="location-row p-4 hover:bg-slate-50 rounded-lg cursor-pointer transition-all flex justify-between items-center group border-l-4 border-transparent">
+                                 class="location-row p-3 hover:bg-slate-50 rounded-lg cursor-pointer transition-all flex justify-between items-center group border-l-4 border-transparent">
                                 <div class="flex items-center space-x-2">
-                                    <span class="text-sm">${icon}</span>
-                                    <h4 class="font-mono font-bold text-slate-800 text-sm group-hover:text-michigan-blue transition-colors">${loc}</h4>
+                                    <h4 class="font-mono font-bold text-slate-800 text-xs group-hover:text-michigan-blue transition-colors">${loc}</h4>
                                 </div>
-                                <span class="text-xs px-2.5 py-1 bg-slate-100 font-bold rounded-md text-slate-500 uppercase tracking-wider group-hover:bg-michigan-blue group-hover:text-white transition-all">Inspect</span>
+                                <span class="text-[10px] px-2 py-0.5 bg-slate-100 font-bold rounded-md text-slate-500 uppercase tracking-wider group-hover:bg-michigan-blue group-hover:text-white transition-all">Inspect</span>
                             </div>`;
                     });
                     
-                    // Auto-click the first container in the list to populate the view layout framework
                     const firstLoc = containerNode.querySelector('.location-row');
                     if (firstLoc) firstLoc.click();
-                });
+                })
+                .catch(err => console.error(err));
         }
 
         function focusHardwareModel(modelId) {
-            if (activeSidebarViewMode !== 'models') return;
+            activeSidebarViewMode = 'models';
             currentFocusedModelId = modelId;
+            currentFocusedLocationId = null;
             
             document.getElementById('empty-state-panel').classList.add('hidden');
             document.getElementById('active-management-panel').classList.remove('hidden');
@@ -280,14 +591,13 @@
             document.getElementById('modal-active-model-id').value = modelId;
             document.getElementById('delete-container-btn').classList.add('hidden');
             document.getElementById('delete-model-btn').classList.remove('hidden');
+            document.getElementById('add-serial-btn').classList.remove('hidden');
 
-            // Clean up all rows to remove previous active highlight configurations
             document.querySelectorAll('.catalog-row').forEach(el => {
                 el.classList.remove('bg-amber-50/60', 'border-michigan-maize', 'shadow-xs');
                 el.classList.add('border-transparent');
             });
 
-            // Apply uniform Maize-Yellow border flag to the actively targeted element row
             const activeRow = document.getElementById(`catalog-row-${modelId}`);
             if (activeRow) {
                 activeRow.classList.remove('border-transparent');
@@ -305,41 +615,44 @@
                     
                     if (data.allocations.length === 0) {
                         grid.innerHTML = `<div class="col-span-full p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-lg border border-dashed border-slate-200">This hardware platform isn't staged anywhere right now. Assign a storage node below.</div>`;
-                        return;
+                    } else {
+                        data.allocations.forEach(alloc => {
+                            const badgeStyle = alloc.container_type === 'Pallet Array' 
+                                ? 'bg-michigan-maize text-michigan-blue border border-amber-400'
+                                : 'bg-michigan-blue text-white';
+
+                            const typeLabel = alloc.container_type === 'Pallet Array' ? 'Pallet' : 'Shelf';
+                            
+                            grid.innerHTML += `
+                                <div class="border border-slate-200 rounded-lg p-2.5 bg-white shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between space-y-2">
+                                    <div class="flex justify-between items-start gap-2">
+                                        <div>
+                                            <span class="px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider ${badgeStyle} rounded">${typeLabel}</span>
+                                            <h4 class="font-mono font-bold text-slate-900 text-xs mt-1">${alloc.container_id}</h4>
+                                        </div>
+                                        <div class="text-right shrink-0">
+                                            <span id="card-qty-${alloc.id}" class="text-base font-black text-michigan-blue">${alloc.quantity}</span>
+                                            <p class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Staged Units</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center space-x-1 border border-slate-200 bg-slate-50 rounded-md p-0.5">
+                                        <button type="button" onclick="handleDecrement(${alloc.id})" class="w-6 h-6 font-bold bg-white hover:bg-slate-200 text-slate-700 rounded select-none border border-slate-200 transition-colors text-xs flex items-center justify-center">-</button>
+                                        <input id="input-qty-${alloc.id}" type="number" readonly value="${alloc.quantity}" class="w-full text-center text-xs font-extrabold bg-transparent border-none outline-none text-slate-800">
+                                        <button type="button" onclick="handleIncrement(${alloc.id})" class="w-6 h-6 font-bold bg-white hover:bg-slate-200 text-slate-700 rounded select-none border border-slate-200 transition-colors text-xs flex items-center justify-center">+</button>
+                                    </div>
+                                </div>`;
+                        });
                     }
+                })
+                .catch(err => console.error(err));
 
-                    data.allocations.forEach(alloc => {
-                        // Fixed: Correctly outputs your customized blue/yellow variables into the layout generator template string
-                        const badgeStyle = alloc.container_type === 'Pallet Array' 
-                            ? 'bg-michigan-maize text-michigan-blue border border-amber-400'
-                            : 'bg-michigan-blue text-white';
-
-                        const typeLabel = alloc.container_type === 'Pallet Array' ? 'Pallet' : 'Shelf';
-                        
-                        grid.innerHTML += `
-                            <div class="border border-slate-200 rounded-xl p-4 bg-white shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4">
-                                <div class="flex justify-between items-start">
-                                    <div>
-                                        <span class="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${badgeStyle} rounded">${typeLabel}</span>
-                                        <h4 class="font-mono font-bold text-slate-900 text-base mt-1.5">${alloc.container_id}</h4>
-                                    </div>
-                                    <div class="text-right">
-                                        <span id="card-qty-${alloc.id}" class="text-2xl font-black text-michigan-blue">${alloc.quantity}</span>
-                                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Staged Units</p>
-                                    </div>
-                                </div>
-                                <div class="flex items-center space-x-1 border border-slate-200 bg-slate-50 rounded-lg p-1">
-                                    <button type="button" onclick="modifyQty(${alloc.id}, -1)" class="w-8 h-8 font-black bg-white hover:bg-slate-200 text-slate-700 rounded-md select-none border border-slate-200 transition-colors">-</button>
-                                    <input id="input-qty-${alloc.id}" type="number" readonly value="${alloc.quantity}" class="w-full text-center text-sm font-extrabold bg-transparent border-none outline-none text-slate-800">
-                                    <button type="button" onclick="modifyQty(${alloc.id}, 1)" class="w-8 h-8 font-black bg-white hover:bg-slate-200 text-slate-700 rounded-md select-none border border-slate-200 transition-colors">+</button>
-                                </div>
-                            </div>`;
-                    });
-                });
+            loadSerialsForModel(modelId);
         }
 
         function focusPhysicalLocation(containerId) {
+            activeSidebarViewMode = 'locations';
             currentFocusedLocationId = containerId;
+            currentFocusedModelId = null;
             
             document.getElementById('empty-state-panel').classList.add('hidden');
             document.getElementById('active-management-panel').classList.remove('hidden');
@@ -348,14 +661,13 @@
             document.getElementById('matrix-grid-title').innerText = "Nested Components Packing Manifest";
             document.getElementById('delete-container-btn').classList.remove('hidden');
             document.getElementById('delete-model-btn').classList.add('hidden');
+            document.getElementById('add-serial-btn').classList.add('hidden');
 
-            // Clean up all container row states cleanly 
             document.querySelectorAll('.location-row').forEach(el => {
                 el.classList.remove('bg-amber-50/60', 'border-michigan-maize', 'shadow-xs');
                 el.classList.add('border-transparent');
             });
 
-            // Force the matching Maize-Yellow bar highlight to apply here as well
             const activeLocRow = document.getElementById(`location-row-${containerId}`);
             if (activeLocRow) {
                 activeLocRow.classList.remove('border-transparent');
@@ -373,117 +685,387 @@
                     
                     if (data.items.length === 0) {
                         grid.innerHTML = `<div class="col-span-full p-12 text-center text-xs text-slate-400 bg-slate-50 border border-dashed rounded-xl">This storage layout node contains zero tracked hardware models. Completely clear.</div>`;
-                        return;
+                    } else {
+                        data.items.forEach(item => {
+                            grid.innerHTML += `
+                                <div class="border border-slate-200 rounded-lg p-2.5 bg-white shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between space-y-2">
+                                    <div class="flex justify-between items-start gap-2">
+                                        <div class="max-w-[70%]">
+                                            <h4 class="font-bold text-slate-900 text-xs leading-tight">${item.model_name}</h4>
+                                            <p class="text-[10px] text-slate-400 font-mono mt-0.5">PN: ${item.sku}</p>
+                                        </div>
+                                        <div class="text-right shrink-0">
+                                            <span id="card-qty-${item.alloc_id}" class="text-base font-black text-michigan-blue">${item.quantity}</span>
+                                            <p class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Staged Here</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center space-x-1 border border-slate-200 bg-slate-50 rounded-md p-0.5">
+                                        <button type="button" onclick="handleDecrement(${item.alloc_id})" class="w-6 h-6 font-bold bg-white hover:bg-slate-200 text-slate-700 rounded select-none border border-slate-200 transition-colors text-xs flex items-center justify-center">-</button>
+                                        <input id="input-qty-${item.alloc_id}" type="number" readonly value="${item.quantity}" class="w-full text-center text-xs font-extrabold bg-transparent border-none outline-none text-slate-800">
+                                        <button type="button" onclick="handleIncrement(${item.alloc_id})" class="w-6 h-6 font-bold bg-white hover:bg-slate-200 text-slate-700 rounded select-none border border-slate-200 transition-colors text-xs flex items-center justify-center">+</button>
+                                    </div>
+                                </div>`;
+                        });
                     }
+                })
+                .catch(err => console.error(err));
 
-                    data.items.forEach(item => {
-                        grid.innerHTML += `
-                            <div class="border border-slate-200 rounded-xl p-4 bg-white shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4">
-                                <div class="flex justify-between items-start">
-                                    <div class="max-w-[75%]">
-                                        <h4 class="font-bold text-slate-900 text-sm leading-tight">${item.model_name}</h4>
-                                        <p class="text-xs text-slate-400 font-mono mt-1">PN: ${item.sku}</p>
-                                    </div>
-                                    <div class="text-right">
-                                        <span id="card-qty-${item.alloc_id}" class="text-2xl font-black text-michigan-blue">${item.quantity}</span>
-                                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Staged Here</p>
-                                    </div>
-                                </div>
-                                <div class="flex items-center space-x-1 border border-slate-200 bg-slate-50 rounded-lg p-1">
-                                    <button type="button" onclick="modifyQty(${item.alloc_id}, -1)" class="w-8 h-8 font-black bg-white hover:bg-slate-200 text-slate-700 rounded-md select-none border border-slate-200 transition-colors">-</button>
-                                    <input id="input-qty-${item.alloc_id}" type="number" readonly value="${item.quantity}" class="w-full text-center text-sm font-extrabold bg-transparent border-none outline-none text-slate-800">
-                                    <button type="button" onclick="modifyQty(${item.alloc_id}, 1)" class="w-8 h-8 font-black bg-white hover:bg-slate-200 text-slate-700 rounded-md select-none border border-slate-200 transition-colors">+</button>
-                                </div>
-                            </div>`;
-                    });
-                });
+            loadSerialsForContainer(containerId);
         }
 
-        function triggerContainerClearout() {
+        function loadSerialsForModel(modelId) {
+            fetch(`/api/model/${modelId}/serials`)
+                .then(res => res.json())
+                .then(resData => renderSerialList(resData.serials || []))
+                .catch(err => console.error(err));
+        }
+
+        function loadSerialsForContainer(containerId) {
+            fetch(`/api/container/${containerId}/serials`)
+                .then(res => res.json())
+                .then(resData => renderSerialList(resData.serials || []))
+                .catch(err => console.error(err));
+        }
+
+        function renderSerialList(serials) {
+            const container = document.getElementById('serial-list-container');
+            container.innerHTML = '';
+
+            if (!serials || serials.length === 0) {
+                container.innerHTML = `<p class="text-xs text-slate-400 p-3 col-span-full text-center">No serial numbers registered yet.</p>`;
+                return;
+            }
+
+            serials.forEach(s => {
+                const locationLabel = s.container_id || 'Unassigned';
+                
+                const badgeStyle = s.container_type === 'Pallet Array' 
+                    ? 'bg-michigan-maize text-michigan-blue border border-amber-400' 
+                    : (s.container_type ? 'bg-michigan-blue text-white' : 'bg-slate-100 text-slate-500');
+
+                container.innerHTML += `
+                    <div class="flex items-center justify-between bg-white border border-slate-200 rounded-lg p-2 shadow-2xs">
+                        <div class="truncate pr-2">
+                            <span class="font-mono text-xs font-bold text-slate-800 block truncate">${s.serial_code}</span>
+                            <div class="mt-1">
+                                <span class="px-1.5 py-0.5 text-[10px] font-mono font-bold tracking-wider ${badgeStyle} rounded inline-block">
+                                    ${locationLabel}
+                                </span>
+                            </div>
+                        </div>
+                        <button onclick="deleteSerialCode(${s.id})" class="text-slate-400 hover:text-red-600 font-bold px-2 py-0.5 text-sm transition-colors" title="Delete Serial">
+                            ×
+                        </button>
+                    </div>`;
+            });
+        }
+
+        async function handleIncrement(allocId) {
+            const result = await showCustomDialog({
+                title: "Register New Staged Unit",
+                message: "Please enter the Serial Code for the new item. Leave blank to generate default barcode ('00000000').",
+                hasInput: true,
+                inputLabel: "Serial Barcode Number",
+                defaultValue: "",
+                showCancel: true
+            });
+
+            if (result === null) return;
+
+            const serialCode = result.trim() === "" ? "00000000" : result.trim();
+
+            try {
+                const response = await fetch(`/api/allocation/${allocId}/update`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'increment',
+                        serial_code: serialCode
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    showToast(data.error || "Failed to add unit.", "error");
+                    return;
+                }
+
+                showToast("Unit successfully added.", "info");
+                refreshActiveView();
+            } catch (err) {
+                console.error(err);
+                showToast("Server communication error while adding unit.", "error");
+            }
+        }
+
+        async function handleDecrement(allocId) {
+            try {
+                const serialRes = await fetch(`/api/allocation/${allocId}/serials`);
+                const resData = await serialRes.json();
+                const serials = resData.serials || [];
+
+                let serialIdToRemove = null;
+
+                if (serials.length > 0) {
+                    const optionsList = serials.map(s => ({
+                        value: s.id,
+                        label: `${s.serial_code}`
+                    }));
+
+                    const selectedValue = await showCustomDialog({
+                        title: "Remove Staged Unit",
+                        message: "Select the specific Serial Barcode record to remove from this location container:",
+                        optionsList: optionsList,
+                        showCancel: true
+                    });
+
+                    if (selectedValue === null) return;
+                    serialIdToRemove = selectedValue;
+                }
+
+                const response = await fetch(`/api/allocation/${allocId}/update`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'decrement',
+                        serial_id: serialIdToRemove
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    showToast(data.error || "Failed to remove unit.", "error");
+                    return;
+                }
+
+                showToast("Unit successfully removed.", "info");
+                refreshActiveView();
+            } catch (err) {
+                console.error(err);
+                showToast("Server communication error while removing unit.", "error");
+            }
+        }
+
+        async function submitNewSerial(e) {
+            e.preventDefault();
+            const codeInput = document.getElementById('serial-input-code');
+            const locationSelect = document.getElementById('serial-input-location');
+            const serialCode = codeInput.value.trim();
+            const locationId = locationSelect ? locationSelect.value : null;
+
+            if (!serialCode || !currentFocusedModelId) return;
+
+            if (!locationId) {
+                showToast("Please select a target container location for this serial.", "warning");
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/serials/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        serial_code: serialCode,
+                        model_id: currentFocusedModelId,
+                        location_id: locationId
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    showToast(data.error || "Failed to register serial.", "error");
+                    return;
+                }
+
+                codeInput.value = '';
+                toggleModal('add-serial-modal');
+                showToast("Serial code registered successfully.", "info");
+                refreshActiveView();
+            } catch (err) {
+                console.error(err);
+                showToast("Server communication error while creating serial.", "error");
+            }
+        }
+
+        async function deleteSerialCode(serialId) {
+            const confirmed = await showCustomDialog({
+                title: "Confirm Deletion",
+                message: "Are you sure you want to delete this serial number record?",
+                showCancel: true
+            });
+
+            if (!confirmed) return;
+
+            try {
+                const response = await fetch(`/api/serials/${serialId}/delete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    showToast(data.error || "Failed to delete serial code.", "error");
+                    return;
+                }
+
+                showToast("Serial code deleted.", "info");
+                refreshActiveView();
+            } catch (err) {
+                console.error(err);
+                showToast("Server communication error while deleting serial code.", "error");
+            }
+        }
+
+        async function triggerContainerClearout() {
             if (!currentFocusedLocationId) return;
             
-            const confirmClear = confirm(`Are you absolutely sure you want to delete ${currentFocusedLocationId}? This will completely remove all network items currently assigned to it from your warehouse counts.`);
-            
-            if (confirmClear) {
-                fetch(`/api/container/${currentFocusedLocationId}/delete`, {
-                    method: 'POST'
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        alert(data.message);
-                        window.location.reload();
-                    } else {
-                        alert("Error during clearout: " + data.error);
-                    }
+            const confirmed = await showCustomDialog({
+                title: "Purge Container Location",
+                message: `Are you sure you want to purge container ${currentFocusedLocationId} and all associated items?`,
+                showCancel: true
+            });
+
+            if (!confirmed) return;
+
+            try {
+                const response = await fetch(`/api/container/${currentFocusedLocationId}/delete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
                 });
+
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    showToast(data.error || "Failed to delete container.", "error");
+                    return;
+                }
+
+                showToast(`Container ${currentFocusedLocationId} purged.`, "info");
+                switchSidebarView('locations');
+            } catch (err) {
+                console.error(err);
+                showToast("Server communication error while purging container.", "error");
             }
         }
 
-        function triggerModelClearout() {
+        async function triggerModelClearout() {
             if (!currentFocusedModelId) return;
 
-            const confirmClear = confirm(`Are you absolutely sure you want to delete ${currentFocusedModelId}? This will completely remove this hardware model and remove all of its unit tracking allocations`)
+            const confirmed = await showCustomDialog({
+                title: "Purge Hardware Model",
+                message: "Are you sure you want to purge this hardware model and all serial/allocation records?",
+                showCancel: true
+            });
 
-            if(confirmClear) {
-                fetch(`/api/model/${currentFocusedModelId}/delete`, {
-                    method: 'POST'
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        alert(data.message)
-                        window.location.reload();
-                    } else {
-                        alert("Error during model removal: " + data.error)
-                    }
+            if (!confirmed) return;
+
+            try {
+                const response = await fetch(`/api/model/${currentFocusedModelId}/delete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
                 });
+
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    showToast(data.error || "Failed to delete model.", "error");
+                    return;
+                }
+
+                showToast("Hardware model purged.", "info");
+                window.location.reload();
+            } catch (err) {
+                console.error(err);
+                showToast("Server communication error while deleting model.", "error");
             }
         }
 
-        function modifyQty(allocId, shiftAmount) {
-            const inputField = document.getElementById(`input-qty-${allocId}`);
-            let targetValue = parseInt(inputField.value) + shiftAmount;
-            if (targetValue < 0) return;
+        async function exportToGoogleSheet() {
+            const btn = document.getElementById('export-sheets-btn');
+            const originalText = btn ? btn.innerHTML : '';
             
-            fetch(`/api/allocation/${allocId}/update`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ quantity: targetValue })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    inputField.value = targetValue;
-                    document.getElementById(`card-qty-${allocId}`).innerText = targetValue;
-                    
-                    if (activeSidebarViewMode === 'models') {
-                        document.getElementById('target-display-count').innerText = data.new_global_total;
-                        document.getElementById(`global-counter-${currentFocusedModelId}`).innerText = data.new_global_total;
-                    } else {
-                        fetch(`/api/container/${currentFocusedLocationId}/items`)
-                            .then(res => res.json())
-                            .then(cData => {
-                                document.getElementById('target-display-count').innerText = cData.total_items;
-                            });
-                    }
+            if (btn) {
+                btn.disabled = true;
+                btn.classList.add('opacity-75', 'cursor-not-allowed');
+                btn.innerHTML = `
+                    <svg class="animate-spin w-4 h-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Exporting...</span>
+                `;
+            }
+
+            showToast("Initiating export...", "info");
+
+            try {
+                const response = await fetch('/api/export/google-sheets', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    showToast(data.error || "Failed to export data.", "error");
+                    return;
                 }
-            });
+
+                if (data.is_fallback) {
+                    // Copy TSV table data directly to browser clipboard
+                    if (data.tsv_data && navigator.clipboard) {
+                        try {
+                            await navigator.clipboard.writeText(data.tsv_data);
+                        } catch (clipErr) {
+                            console.error("Clipboard write failed:", clipErr);
+                        }
+                    }
+
+                    // Trigger CSV file download as fallback backup
+                    if (data.csv_download_url) {
+                        const link = document.createElement('a');
+                        link.href = data.csv_download_url;
+                        link.download = 'network_spares_inventory.csv';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }
+
+                    showToast("Copied data to clipboard! Press Ctrl+V in Google Sheet.", "info");
+
+                    // Show user guidance prompt
+                    await showCustomDialog({
+                        title: "Google Sheet Data Copied to Clipboard",
+                        message: "All warehouse inventory records have been copied to your clipboard. Click cell A1 in the newly opened Google Sheet and press Ctrl+V (or Cmd+V) to populate it instantly!",
+                        showCancel: false
+                    });
+
+                    window.open(data.spreadsheet_url, '_blank');
+                } else if (data.spreadsheet_url) {
+                    showToast("Google Sheet generated successfully!", "info");
+                    window.open(data.spreadsheet_url, '_blank');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast("Server error during Google Sheets export.", "error");
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                    btn.innerHTML = originalText;
+                }
+            }
         }
 
-        function filterSidebarList() {
-            const query = document.getElementById('catalog-search-input').value.toLowerCase().trim();
-            const targetSelectorClass = activeSidebarViewMode === 'models' ? '.catalog-row' : '.location-row';
-            
-            document.querySelectorAll(targetSelectorClass).forEach(row => {
-                const checkStringText = row.innerText.toLowerCase();
-                row.style.display = checkStringText.includes(query) ? "" : "none";
-            });
+        function refreshActiveView() {
+            if (activeSidebarViewMode === 'models' && currentFocusedModelId) {
+                focusHardwareModel(currentFocusedModelId);
+            } else if (activeSidebarViewMode === 'locations' && currentFocusedLocationId) {
+                focusPhysicalLocation(currentFocusedLocationId);
+            }
         }
 
-        window.addEventListener('DOMContentLoaded', () => {
-            const firstRow = document.querySelector('.catalog-row');
-            if (firstRow) firstRow.click();
+        document.addEventListener("DOMContentLoaded", () => {
+            const firstModel = document.querySelector('.catalog-row');
+            if (firstModel) firstModel.click();
         });
     </script>
 </body>
