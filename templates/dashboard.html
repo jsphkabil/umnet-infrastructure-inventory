@@ -37,7 +37,13 @@
                     <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
                         <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 7h10v2H7zm0 4h10v2H7zm0 4h7v2H7z"/>
                     </svg>
-                    <span>Export to Sheet</span>
+                    <span>Export to Google Sheet</span>
+                </button>
+                <button onclick="toggleModal('import-csv-modal')" class="px-3 py-1.5 text-xs font-bold bg-blue-600 hover:bg-blue-500 border border-blue-400/30 rounded-lg text-white transition-all flex items-center space-x-1.5 shadow-xs">
+                    <svg class="w-4 h-4 fill-none stroke-current" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    <span>Restore / Import CSV</span>
                 </button>
                 <button onclick="window.location.reload();" class="px-3 py-1.5 text-xs font-semibold bg-white/10 border border-white/20 rounded-lg hover:bg-white/20 text-white transition-colors">
                     Sync Ledger
@@ -273,6 +279,45 @@
         </div>
     </div>
 
+    <!-- MODAL 4: EMERGENCY RESTORE / IMPORT CSV -->
+    <div id="import-csv-modal" class="fixed inset-0 z-50 overflow-y-auto hidden">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-michigan-blue/40 backdrop-blur-xs" onclick="toggleModal('import-csv-modal')"></div>
+            <div class="inline-block bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full border border-slate-200 z-10">
+                <form id="import-csv-form" onsubmit="submitCsvImport(event)">
+                    <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                        <div>
+                            <h3 class="font-bold text-michigan-blue text-sm uppercase tracking-wide">Emergency Restore / Import Inventory</h3>
+                            <p class="text-[11px] text-slate-500 mt-0.5">Repopulate database using exported CSV or TSV sheets</p>
+                        </div>
+                        <button type="button" onclick="toggleModal('import-csv-modal')" class="text-slate-400 hover:text-slate-600 text-lg">×</button>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Option A: Upload `.csv` or `.tsv` File</label>
+                            <input type="file" id="import-file-input" accept=".csv, .tsv, .txt" class="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-michigan-blue file:text-white hover:file:bg-blue-900 border border-slate-200 rounded-lg p-1">
+                        </div>
+                        <div class="relative flex py-1 items-center">
+                            <div class="flex-grow border-t border-slate-200"></div>
+                            <span class="flex-shrink mx-2 text-[10px] font-bold text-slate-400 uppercase">OR</span>
+                            <div class="flex-grow border-t border-slate-200"></div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Option B: Paste Raw CSV / TSV Text</label>
+                            <textarea id="import-text-input" rows="5" placeholder="Paste headers and rows copied from Google Sheets or CSV file..." class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none"></textarea>
+                        </div>
+                    </div>
+                    <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end space-x-2">
+                        <button type="button" onclick="toggleModal('import-csv-modal')" class="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
+                        <button type="submit" id="import-submit-btn" class="px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-500 shadow-sm flex items-center space-x-1.5">
+                            <span>Execute Restore</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- CUSTOM UI DIALOG MODAL -->
     <div id="custom-dialog-modal" class="fixed inset-0 z-50 overflow-y-auto hidden">
         <div class="flex items-center justify-center min-h-screen px-4">
@@ -281,7 +326,7 @@
                 <div class="flex items-start justify-between">
                     <div>
                         <h3 id="custom-dialog-title" class="font-bold text-michigan-blue text-base">Notice</h3>
-                        <p id="custom-dialog-message" class="text-xs text-slate-600 mt-1"></p>
+                        <div id="custom-dialog-message" class="text-xs text-slate-600 mt-2 whitespace-pre-line leading-relaxed"></div>
                     </div>
                 </div>
                 <div id="custom-dialog-input-container" class="hidden">
@@ -295,7 +340,7 @@
                 </div>
                 <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
                     <button id="custom-dialog-cancel-btn" type="button" class="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hidden">Cancel</button>
-                    <button id="custom-dialog-confirm-btn" type="button" class="px-4 py-2 text-xs font-bold text-michigan-blue bg-michigan-maize rounded-lg hover:bg-yellow-400 shadow-sm">Confirm</button>
+                    <button id="custom-dialog-confirm-btn" type="button" class="px-4 py-2 text-xs font-bold text-michigan-blue bg-michigan-maize rounded-lg hover:bg-yellow-400 shadow-sm">OK</button>
                 </div>
             </div>
         </div>
@@ -322,6 +367,14 @@
                 btn.classList.remove('hidden');
             } else {
                 btn.classList.add('hidden');
+            }
+        }
+
+        function updateSidebarGlobalCount(modelId, count) {
+            if (!modelId) return;
+            const counterEl = document.getElementById(`global-counter-${modelId}`);
+            if (counterEl) {
+                counterEl.innerText = count;
             }
         }
 
@@ -364,6 +417,7 @@
 
                 titleEl.innerText = options.title || 'Notification';
                 msgEl.innerText = options.message || '';
+                confirmBtn.innerText = options.confirmText || 'OK';
 
                 if (options.hasInput) {
                     inputContainer.classList.remove('hidden');
@@ -416,6 +470,35 @@
                     resolve(null);
                 };
             });
+        }
+
+        async function copyTextToClipboard(text) {
+            if (navigator.clipboard && window.isSecureContext) {
+                try {
+                    await navigator.clipboard.writeText(text);
+                    return true;
+                } catch (err) {
+                    console.warn("Clipboard API failed, attempting execCommand fallback:", err);
+                }
+            }
+            
+            const tempTextArea = document.createElement('textarea');
+            tempTextArea.value = text;
+            tempTextArea.style.position = 'fixed';
+            tempTextArea.style.left = '-999999px';
+            tempTextArea.style.top = '-999999px';
+            document.body.appendChild(tempTextArea);
+            tempTextArea.focus();
+            tempTextArea.select();
+            
+            let success = false;
+            try {
+                success = document.execCommand('copy');
+            } catch (err) {
+                console.error("execCommand fallback failed:", err);
+            }
+            document.body.removeChild(tempTextArea);
+            return success;
         }
 
         function openAddSerialModal() {
@@ -574,7 +657,7 @@
                     });
                     
                     const firstLoc = containerNode.querySelector('.location-row');
-                    if (firstLoc) firstLoc.click();
+                    if (firstLoc && !currentFocusedLocationId) firstLoc.click();
                 })
                 .catch(err => console.error(err));
         }
@@ -610,6 +693,7 @@
                 .then(data => {
                     document.getElementById('target-display-name').innerText = data.model_name;
                     document.getElementById('target-display-count').innerText = data.global_total;
+                    updateSidebarGlobalCount(modelId, data.global_total);
                     
                     const grid = document.getElementById('dynamic-grid-cards-container');
                     grid.innerHTML = '';
@@ -791,6 +875,10 @@
                     return;
                 }
 
+                if (data.model_id && data.new_global_total !== undefined) {
+                    updateSidebarGlobalCount(data.model_id, data.new_global_total);
+                }
+
                 showToast("Unit successfully added.", "info");
                 refreshActiveView();
             } catch (err) {
@@ -839,6 +927,10 @@
                     return;
                 }
 
+                if (data.model_id && data.new_global_total !== undefined) {
+                    updateSidebarGlobalCount(data.model_id, data.new_global_total);
+                }
+
                 showToast("Unit successfully removed.", "info");
                 refreshActiveView();
             } catch (err) {
@@ -878,6 +970,10 @@
                     return;
                 }
 
+                if (data.model_id && data.new_global_total !== undefined) {
+                    updateSidebarGlobalCount(data.model_id, data.new_global_total);
+                }
+
                 codeInput.value = '';
                 toggleModal('add-serial-modal');
                 showToast("Serial code registered successfully.", "info");
@@ -907,6 +1003,10 @@
                 if (!response.ok || !data.success) {
                     showToast(data.error || "Failed to delete serial code.", "error");
                     return;
+                }
+
+                if (data.model_id && data.new_global_total !== undefined) {
+                    updateSidebarGlobalCount(data.model_id, data.new_global_total);
                 }
 
                 showToast("Serial code deleted.", "info");
@@ -983,8 +1083,6 @@
             const btn = document.getElementById('export-sheets-btn');
             const originalText = btn ? btn.innerHTML : '';
             
-            const sheetWindow = window.open('about:blank', '_blank');
-            
             if (btn) {
                 btn.disabled = true;
                 btn.classList.add('opacity-75', 'cursor-not-allowed');
@@ -993,93 +1091,51 @@
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <span>Preparing Sheet...</span>
+                    <span>Preparing Export...</span>
                 `;
             }
-
-            showToast("Formatting inventory for clipboard...", "info");
 
             try {
                 const response = await fetch('/api/export/google-sheets', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
-
                 const data = await response.json();
 
                 if (!response.ok || !data.success) {
-                    if (sheetWindow) sheetWindow.close();
-                    showToast(data.error || "Failed to export data.", "error");
+                    showToast(data.error || "Failed to generate Google Sheet export.", "error");
                     return;
                 }
 
-                if (data.is_fallback) {
-                    let copiedSuccess = false;
-                    
-                    if (navigator.clipboard && window.ClipboardItem) {
-                        try {
-                            const blobHtml = new Blob([data.html_data || data.tsv_data], { type: 'text/html' });
-                            const blobText = new Blob([data.tsv_data], { type: 'text/plain' });
-                            await navigator.clipboard.write([
-                                new ClipboardItem({
-                                    'text/html': blobHtml,
-                                    'text/plain': blobText
-                                })
-                            ]);
-                            copiedSuccess = true;
-                        } catch (clipErr) {
-                            console.warn("ClipboardItem write failed, falling back to writeText:", clipErr);
-                        }
-                    }
+                const tsvData = data.tsv_data || '';
+                const sheetUrl = data.spreadsheet_url || 'https://sheets.new';
 
-                    if (!copiedSuccess && navigator.clipboard && navigator.clipboard.writeText) {
-                        try {
-                            await navigator.clipboard.writeText(data.tsv_data);
-                            copiedSuccess = true;
-                        } catch (err) {
-                            console.warn("writeText failed:", err);
-                        }
-                    }
+                // Display directional instructions popup
+                const userConfirmed = await showCustomDialog({
+                    title: "Export to Google Sheets & Excel",
+                    message: "Press OK to complete the export process:\n\n1. Formatted inventory will be copied to your clipboard.\n2. An Excel / CSV spreadsheet backup file will download automatically.\n3. Google Sheets will open in a new tab (press Ctrl+V or Cmd+V to paste into cell A1).",
+                    showCancel: true,
+                    confirmText: "OK / Proceed"
+                });
 
-                    if (!copiedSuccess) {
-                        const textarea = document.createElement('textarea');
-                        textarea.value = data.tsv_data;
-                        textarea.style.position = 'fixed';
-                        textarea.style.opacity = '0';
-                        document.body.appendChild(textarea);
-                        textarea.select();
-                        try {
-                            document.execCommand('copy');
-                            copiedSuccess = true;
-                        } catch (err) {
-                            console.error("execCommand copy failed:", err);
-                        }
-                        document.body.removeChild(textarea);
-                    }
+                if (userConfirmed) {
+                    // 1. Copy formatted TSV matrix directly inside the button click handler context
+                    await copyTextToClipboard(tsvData);
 
-                    if (sheetWindow) {
-                        sheetWindow.location.href = data.spreadsheet_url || 'https://sheets.new';
-                    } else {
-                        window.open(data.spreadsheet_url || 'https://sheets.new', '_blank');
-                    }
+                    // 2. Trigger automatic backup Excel / CSV download
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = '/api/export/csv';
+                    downloadLink.download = 'network_spares_inventory.csv';
+                    document.body.appendChild(downloadLink);
+                    downloadLink.click();
+                    document.body.removeChild(downloadLink);
 
-                    showToast("Inventory copied! Press Ctrl+V (or Cmd+V) in Google Sheets.", "info");
+                    // 3. Open Google Sheets window
+                    window.open(sheetUrl, '_blank');
 
-                    await showCustomDialog({
-                        title: "Inventory Matrix Copied!",
-                        message: "A new Google Sheet is ready. Click cell A1 in Google Sheets and press Ctrl+V (or Cmd+V) to paste your matrix with full formatting and colors!",
-                        showCancel: false
-                    });
-                } else if (data.spreadsheet_url) {
-                    if (sheetWindow) {
-                        sheetWindow.location.href = data.spreadsheet_url;
-                    } else {
-                        window.open(data.spreadsheet_url, '_blank');
-                    }
-                    showToast("Google Sheet generated successfully!", "info");
+                    showToast("Copied to clipboard & Excel downloaded! Press Ctrl+V in Google Sheets to paste.", "info");
                 }
             } catch (err) {
-                if (sheetWindow) sheetWindow.close();
                 console.error(err);
                 showToast("Server error during Google Sheets export.", "error");
             } finally {
@@ -1091,11 +1147,67 @@
             }
         }
 
+        async function submitCsvImport(e) {
+            e.preventDefault();
+            const fileInput = document.getElementById('import-file-input');
+            const textInput = document.getElementById('import-text-input');
+            const submitBtn = document.getElementById('import-submit-btn');
+
+            const file = fileInput.files[0];
+            const rawText = textInput.value.trim();
+
+            if (!file && !rawText) {
+                showToast("Please choose a CSV file or paste raw text.", "warning");
+                return;
+            }
+
+            const formData = new FormData();
+            if (file) {
+                formData.append('file', file);
+            } else {
+                formData.append('csv_content', rawText);
+            }
+
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerText = "Processing Restore...";
+            }
+
+            try {
+                const response = await fetch('/api/import/csv', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    showToast(data.error || "Failed to import ledger.", "error");
+                    return;
+                }
+
+                toggleModal('import-csv-modal');
+                showToast(data.message, "info");
+
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } catch (err) {
+                console.error(err);
+                showToast("Server error during inventory restore.", "error");
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerText = "Execute Restore";
+                }
+            }
+        }
+
         function refreshActiveView() {
             if (activeSidebarViewMode === 'models' && currentFocusedModelId) {
                 focusHardwareModel(currentFocusedModelId);
             } else if (activeSidebarViewMode === 'locations' && currentFocusedLocationId) {
                 focusPhysicalLocation(currentFocusedLocationId);
+                rebuildLocationSidebarTree();
             }
         }
 
