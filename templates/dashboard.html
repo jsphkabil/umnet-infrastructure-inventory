@@ -62,8 +62,8 @@
                     </button>
                 </div>
 
-                <!-- LEVEL 2 HEADER: SEARCH & ACTION BAR (ALIGNED WITH RIGHT PANEL HEADER) -->
-                <div class="p-3 border-b border-slate-200 bg-slate-50/50 min-h-[58px] flex items-center">
+                <!-- LEVEL 2 HEADER: SEARCH & ACTION BAR -->
+                <div class="p-3 border-b border-slate-200 bg-slate-50/50 flex flex-col justify-center">
                     <div class="flex items-center space-x-2 w-full">
                         <input type="text" 
                                id="catalog-search-input" 
@@ -76,6 +76,8 @@
                             <span>+ New Model</span>
                         </button>
                     </div>
+                    <!-- SERIAL MATCHES SEARCH CONTAINER BELOW SEARCH BAR -->
+                    <div id="serial-search-results" class="w-full hidden space-y-1 border-t border-slate-200 pt-2 mt-2"></div>
                 </div>
 
                 <!-- SIDEBAR LIST CONTENT -->
@@ -130,7 +132,7 @@
                         </div>
                     </div>
 
-                    <!-- LEVEL 2 HEADER: DISPLAY NAME & LOAD COUNTER (EVEN WITH SEARCH BAR) -->
+                    <!-- LEVEL 2 HEADER: DISPLAY NAME & LOAD COUNTER -->
                     <div class="p-3 px-5 border-b border-slate-100 bg-slate-50/30 min-h-[58px] flex items-center justify-between flex-wrap gap-2">
                         <div>
                             <h2 id="target-display-name" class="text-xl font-black text-michigan-blue leading-tight">---</h2>
@@ -145,7 +147,7 @@
                         <div>
                             <h3 id="matrix-grid-title" class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Distribution Matrix</h3>
                             
-                            <!-- Dynamic Grid configured for 3 cards per row on medium/large screens -->
+                            <!-- Dynamic Grid -->
                             <div id="dynamic-grid-cards-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                             </div>
                         </div>
@@ -448,14 +450,9 @@
             const rawQuery = document.getElementById('catalog-search-input').value;
             const query = rawQuery.toLowerCase().trim();
             
-            let searchResultsContainer = document.getElementById('serial-search-results');
-            if (!searchResultsContainer) {
-                searchResultsContainer = document.createElement('div');
-                searchResultsContainer.id = 'serial-search-results';
-                searchResultsContainer.className = 'mt-2 space-y-1 border-t border-slate-200 pt-2';
-                document.getElementById('catalog-search-input').parentNode.parentNode.appendChild(searchResultsContainer);
-            }
+            const searchResultsContainer = document.getElementById('serial-search-results');
             searchResultsContainer.innerHTML = '';
+            searchResultsContainer.classList.add('hidden');
 
             const selector = activeSidebarViewMode === 'models' ? '.catalog-row' : '.location-row';
             document.querySelectorAll(selector).forEach(row => {
@@ -470,7 +467,8 @@
                         .then(res => res.json())
                         .then(data => {
                             if (data.success && data.results.length > 0) {
-                                searchResultsContainer.innerHTML = `<p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 my-1">Matched Serials (${data.results.length})</p>`;
+                                searchResultsContainer.classList.remove('hidden');
+                                searchResultsContainer.innerHTML = `<p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1 my-1">Matched Serials (${data.results.length})</p>`;
                                 
                                 data.results.forEach(res => {
                                     const badgeStyle = res.container_type === 'Pallet Array'
@@ -523,7 +521,10 @@
             updateRegisterBtnVisibility();
             
             const searchResultsContainer = document.getElementById('serial-search-results');
-            if (searchResultsContainer) searchResultsContainer.innerHTML = '';
+            if (searchResultsContainer) {
+                searchResultsContainer.innerHTML = '';
+                searchResultsContainer.classList.add('hidden');
+            }
             
             const btnModels = document.getElementById('tab-models');
             const btnLocations = document.getElementById('tab-locations');
@@ -982,6 +983,8 @@
             const btn = document.getElementById('export-sheets-btn');
             const originalText = btn ? btn.innerHTML : '';
             
+            const sheetWindow = window.open('about:blank', '_blank');
+            
             if (btn) {
                 btn.disabled = true;
                 btn.classList.add('opacity-75', 'cursor-not-allowed');
@@ -990,11 +993,11 @@
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <span>Exporting...</span>
+                    <span>Preparing Sheet...</span>
                 `;
             }
 
-            showToast("Initiating export...", "info");
+            showToast("Formatting inventory for clipboard...", "info");
 
             try {
                 const response = await fetch('/api/export/google-sheets', {
@@ -1005,45 +1008,78 @@
                 const data = await response.json();
 
                 if (!response.ok || !data.success) {
+                    if (sheetWindow) sheetWindow.close();
                     showToast(data.error || "Failed to export data.", "error");
                     return;
                 }
 
                 if (data.is_fallback) {
-                    // Copy TSV table data directly to browser clipboard
-                    if (data.tsv_data && navigator.clipboard) {
+                    let copiedSuccess = false;
+                    
+                    if (navigator.clipboard && window.ClipboardItem) {
                         try {
-                            await navigator.clipboard.writeText(data.tsv_data);
+                            const blobHtml = new Blob([data.html_data || data.tsv_data], { type: 'text/html' });
+                            const blobText = new Blob([data.tsv_data], { type: 'text/plain' });
+                            await navigator.clipboard.write([
+                                new ClipboardItem({
+                                    'text/html': blobHtml,
+                                    'text/plain': blobText
+                                })
+                            ]);
+                            copiedSuccess = true;
                         } catch (clipErr) {
-                            console.error("Clipboard write failed:", clipErr);
+                            console.warn("ClipboardItem write failed, falling back to writeText:", clipErr);
                         }
                     }
 
-                    // Trigger CSV file download as fallback backup
-                    if (data.csv_download_url) {
-                        const link = document.createElement('a');
-                        link.href = data.csv_download_url;
-                        link.download = 'network_spares_inventory.csv';
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
+                    if (!copiedSuccess && navigator.clipboard && navigator.clipboard.writeText) {
+                        try {
+                            await navigator.clipboard.writeText(data.tsv_data);
+                            copiedSuccess = true;
+                        } catch (err) {
+                            console.warn("writeText failed:", err);
+                        }
                     }
 
-                    showToast("Copied data to clipboard! Press Ctrl+V in Google Sheet.", "info");
+                    if (!copiedSuccess) {
+                        const textarea = document.createElement('textarea');
+                        textarea.value = data.tsv_data;
+                        textarea.style.position = 'fixed';
+                        textarea.style.opacity = '0';
+                        document.body.appendChild(textarea);
+                        textarea.select();
+                        try {
+                            document.execCommand('copy');
+                            copiedSuccess = true;
+                        } catch (err) {
+                            console.error("execCommand copy failed:", err);
+                        }
+                        document.body.removeChild(textarea);
+                    }
 
-                    // Show user guidance prompt
+                    if (sheetWindow) {
+                        sheetWindow.location.href = data.spreadsheet_url || 'https://sheets.new';
+                    } else {
+                        window.open(data.spreadsheet_url || 'https://sheets.new', '_blank');
+                    }
+
+                    showToast("Inventory copied! Press Ctrl+V (or Cmd+V) in Google Sheets.", "info");
+
                     await showCustomDialog({
-                        title: "Google Sheet Data Copied to Clipboard",
-                        message: "All warehouse inventory records have been copied to your clipboard. Click cell A1 in the newly opened Google Sheet and press Ctrl+V (or Cmd+V) to populate it instantly!",
+                        title: "Inventory Matrix Copied!",
+                        message: "A new Google Sheet is ready. Click cell A1 in Google Sheets and press Ctrl+V (or Cmd+V) to paste your matrix with full formatting and colors!",
                         showCancel: false
                     });
-
-                    window.open(data.spreadsheet_url, '_blank');
                 } else if (data.spreadsheet_url) {
+                    if (sheetWindow) {
+                        sheetWindow.location.href = data.spreadsheet_url;
+                    } else {
+                        window.open(data.spreadsheet_url, '_blank');
+                    }
                     showToast("Google Sheet generated successfully!", "info");
-                    window.open(data.spreadsheet_url, '_blank');
                 }
             } catch (err) {
+                if (sheetWindow) sheetWindow.close();
                 console.error(err);
                 showToast("Server error during Google Sheets export.", "error");
             } finally {
@@ -1063,9 +1099,11 @@
             }
         }
 
-        document.addEventListener("DOMContentLoaded", () => {
-            const firstModel = document.querySelector('.catalog-row');
-            if (firstModel) firstModel.click();
+        document.addEventListener('DOMContentLoaded', () => {
+            const firstRow = document.querySelector('.catalog-row');
+            if (firstRow) {
+                firstRow.click();
+            }
         });
     </script>
 </body>
