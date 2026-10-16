@@ -33,19 +33,21 @@
                 </div>
             </div>
             <div class="flex items-center space-x-3">
-                <button id="export-sheets-btn" onclick="exportToGoogleSheet()" class="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 border border-emerald-400/30 rounded-lg text-white transition-all flex items-center space-x-1.5 shadow-xs">
+                <button id="export-sheets-btn" onclick="exportToGoogleSheet()" class="px-3 py-1.5 text-xs font-semibold bg-white/10 hover:bg-white/20 border border-emerald-400/40 rounded-lg text-emerald-300 transition-all flex items-center space-x-1.5 shadow-xs">
                     <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
                         <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 7h10v2H7zm0 4h10v2H7zm0 4h7v2H7z"/>
                     </svg>
                     <span>Export to Google Sheet</span>
                 </button>
-                <button onclick="toggleModal('import-csv-modal')" class="px-3 py-1.5 text-xs font-bold bg-blue-600 hover:bg-blue-500 border border-blue-400/30 rounded-lg text-white transition-all flex items-center space-x-1.5 shadow-xs">
+
+                <button onclick="toggleModal('import-csv-modal')" class="px-3 py-1.5 text-xs font-semibold bg-white/10 hover:bg-white/20 border border-blue-400/40 rounded-lg text-blue-300 transition-all flex items-center space-x-1.5 shadow-xs">
                     <svg class="w-4 h-4 fill-none stroke-current" viewBox="0 0 24 24" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                     </svg>
                     <span>Restore / Import CSV</span>
                 </button>
-                <button onclick="window.location.reload();" class="px-3 py-1.5 text-xs font-semibold bg-white/10 border border-white/20 rounded-lg hover:bg-white/20 text-white transition-colors">
+
+                <button onclick="window.location.reload();" class="px-3 py-1.5 text-xs font-semibold bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-white transition-colors">
                     Sync Ledger
                 </button>
             </div>
@@ -82,7 +84,6 @@
                             <span>+ New Model</span>
                         </button>
                     </div>
-                    <!-- SERIAL MATCHES SEARCH CONTAINER BELOW SEARCH BAR -->
                     <div id="serial-search-results" class="w-full hidden space-y-1 border-t border-slate-200 pt-2 mt-2"></div>
                 </div>
 
@@ -153,7 +154,6 @@
                         <div>
                             <h3 id="matrix-grid-title" class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Distribution Matrix</h3>
                             
-                            <!-- Dynamic Grid -->
                             <div id="dynamic-grid-cards-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                             </div>
                         </div>
@@ -279,7 +279,7 @@
         </div>
     </div>
 
-    <!-- MODAL 4: EMERGENCY RESTORE / IMPORT CSV -->
+    <!-- MODAL 4: EMERGENCY RESTORE / IMPORT CSV (WITH ADD/SUBTRACT/REPLACE MODES) -->
     <div id="import-csv-modal" class="fixed inset-0 z-50 overflow-y-auto hidden">
         <div class="flex items-center justify-center min-h-screen px-4">
             <div class="fixed inset-0 bg-michigan-blue/40 backdrop-blur-xs" onclick="toggleModal('import-csv-modal')"></div>
@@ -287,12 +287,20 @@
                 <form id="import-csv-form" onsubmit="submitCsvImport(event)">
                     <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
                         <div>
-                            <h3 class="font-bold text-michigan-blue text-sm uppercase tracking-wide">Emergency Restore / Import Inventory</h3>
-                            <p class="text-[11px] text-slate-500 mt-0.5">Repopulate database using exported CSV or TSV sheets</p>
+                            <h3 class="font-bold text-michigan-blue text-sm uppercase tracking-wide">Import / Restore Inventory Data</h3>
+                            <p class="text-[11px] text-slate-500 mt-0.5">Select import operation mode and upload/paste file</p>
                         </div>
                         <button type="button" onclick="toggleModal('import-csv-modal')" class="text-slate-400 hover:text-slate-600 text-lg">×</button>
                     </div>
                     <div class="p-6 space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Select Import Mode</label>
+                            <select id="import-mode-select" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold bg-white focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none">
+                                <option value="add">ADD: Append inventory from Excel sheet</option>
+                                <option value="subtract">SUBTRACT: Remove matching switches/serials in sheet from DB</option>
+                                <option value="replace">REPLACE: Wipe entire DB and reload with sheet contents</option>
+                            </select>
+                        </div>
                         <div>
                             <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Option A: Upload `.csv` or `.tsv` File</label>
                             <input type="file" id="import-file-input" accept=".csv, .tsv, .txt" class="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-michigan-blue file:text-white hover:file:bg-blue-900 border border-slate-200 rounded-lg p-1">
@@ -310,7 +318,7 @@
                     <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end space-x-2">
                         <button type="button" onclick="toggleModal('import-csv-modal')" class="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
                         <button type="submit" id="import-submit-btn" class="px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-500 shadow-sm flex items-center space-x-1.5">
-                            <span>Execute Restore</span>
+                            <span>Execute Import</span>
                         </button>
                     </div>
                 </form>
@@ -600,9 +608,21 @@
 
         function switchSidebarView(mode) {
             activeSidebarViewMode = mode;
-            document.getElementById('catalog-search-input').value = '';
+
+            // 1. Clear the search input text
+            const searchInput = document.getElementById('catalog-search-input');
+            if (searchInput) {
+                searchInput.value = '';
+            }
+
+            // 2. Reset visibility on all model and location list rows
+            document.querySelectorAll('.catalog-row, .location-row').forEach(row => {
+                row.style.display = '';
+            });
+
             updateRegisterBtnVisibility();
             
+            // Clear serial search results dropdown if active
             const searchResultsContainer = document.getElementById('serial-search-results');
             if (searchResultsContainer) {
                 searchResultsContainer.innerHTML = '';
@@ -1110,7 +1130,6 @@
                 const tsvData = data.tsv_data || '';
                 const sheetUrl = data.spreadsheet_url || 'https://sheets.new';
 
-                // Display directional instructions popup
                 const userConfirmed = await showCustomDialog({
                     title: "Export to Google Sheets & Excel",
                     message: "Press OK to complete the export process:\n\n1. Formatted inventory will be copied to your clipboard.\n2. An Excel / CSV spreadsheet backup file will download automatically.\n3. Google Sheets will open in a new tab (press Ctrl+V or Cmd+V to paste into cell A1).",
@@ -1119,10 +1138,8 @@
                 });
 
                 if (userConfirmed) {
-                    // 1. Copy formatted TSV matrix directly inside the button click handler context
                     await copyTextToClipboard(tsvData);
 
-                    // 2. Trigger automatic backup Excel / CSV download
                     const downloadLink = document.createElement('a');
                     downloadLink.href = '/api/export/csv';
                     downloadLink.download = 'network_spares_inventory.csv';
@@ -1130,7 +1147,6 @@
                     downloadLink.click();
                     document.body.removeChild(downloadLink);
 
-                    // 3. Open Google Sheets window
                     window.open(sheetUrl, '_blank');
 
                     showToast("Copied to clipboard & Excel downloaded! Press Ctrl+V in Google Sheets to paste.", "info");
@@ -1151,17 +1167,37 @@
             e.preventDefault();
             const fileInput = document.getElementById('import-file-input');
             const textInput = document.getElementById('import-text-input');
+            const modeSelect = document.getElementById('import-mode-select');
             const submitBtn = document.getElementById('import-submit-btn');
 
             const file = fileInput.files[0];
             const rawText = textInput.value.trim();
+            const mode = modeSelect ? modeSelect.value : 'add';
 
             if (!file && !rawText) {
                 showToast("Please choose a CSV file or paste raw text.", "warning");
                 return;
             }
 
+            // Require confirmation text for REPLACE mode
+            if (mode === 'replace') {
+                const confirmPhrase = await showCustomDialog({
+                    title: "⚠️ DANGER: REPLACE DATABASE",
+                    message: "Replacing the database will PERMANENTLY ERASE all existing inventory and reload only what is in this Excel sheet.\n\nTo confirm you want to proceed, type \"sudo delete database\" below:",
+                    hasInput: true,
+                    inputLabel: "Type Confirmation Phrase",
+                    defaultValue: "",
+                    showCancel: true
+                });
+
+                if (confirmPhrase !== "sudo delete database") {
+                    showToast("Confirmation failed. Database replacement cancelled.", "warning");
+                    return;
+                }
+            }
+
             const formData = new FormData();
+            formData.append('mode', mode);
             if (file) {
                 formData.append('file', file);
             } else {
@@ -1170,7 +1206,7 @@
 
             if (submitBtn) {
                 submitBtn.disabled = true;
-                submitBtn.innerText = "Processing Restore...";
+                submitBtn.innerText = "Processing Import...";
             }
 
             try {
@@ -1193,11 +1229,11 @@
                 }, 1000);
             } catch (err) {
                 console.error(err);
-                showToast("Server error during inventory restore.", "error");
+                showToast("Server error during inventory import.", "error");
             } finally {
                 if (submitBtn) {
                     submitBtn.disabled = false;
-                    submitBtn.innerText = "Execute Restore";
+                    submitBtn.innerText = "Execute Import";
                 }
             }
         }

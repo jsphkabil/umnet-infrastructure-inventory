@@ -16,12 +16,10 @@ def fix_legacy_sqlite_unique_constraint():
     try:
         schema_info = db.session.execute(text("SELECT sql FROM sqlite_master WHERE type='table' AND name='serial_numbers'")).scalar()
         if schema_info and 'UNIQUE' in schema_info.upper() and 'SERIAL_CODE' in schema_info.upper():
-            # Temporarily back up data, rebuild table without UNIQUE constraint, and restore records
             db.session.execute(text("CREATE TABLE IF NOT EXISTS serial_numbers_backup AS SELECT * FROM serial_numbers;"))
             db.session.execute(text("DROP TABLE serial_numbers;"))
             db.session.commit()
             
-            # Re-create table using updated SQLAlchemy model schema
             db.create_all()
             
             db.session.execute(text("""
@@ -155,7 +153,6 @@ def update_quantity(alloc_id):
     if action == 'increment':
         raw_code = data.get('serial_code', '').strip().upper()
         
-        # Default to '00000000' if blank or explicitly set to '00000000'
         if not raw_code or raw_code == '00000000':
             serial_code = '00000000'
         else:
@@ -204,7 +201,6 @@ def update_quantity(alloc_id):
             if fallback_serial:
                 db.session.delete(fallback_serial)
         
-        # Automatically purge allocation card if model quantity hits 0 in this container
         is_purged = allocation.quantity <= 0
         if is_purged:
             db.session.delete(allocation)
@@ -398,7 +394,6 @@ def delete_serial(serial_id):
 
         db.session.delete(serial)
 
-        # Remove allocation if quantity drops to 0
         if alloc and alloc.quantity <= 0:
             db.session.delete(alloc)
 
@@ -448,12 +443,10 @@ def export_csv():
             model_name = model.model_name if model else 'Unknown Model'
             sku = model.sku if model else 'N/A'
 
-            # Export registered serial numbers
             for s in serials:
                 code = s.serial_code if s.serial_code and s.serial_code.strip() else '00000000'
                 writer.writerow([alloc.container_id, alloc.container_type or 'N/A', brand, model_name, sku, code])
 
-            # Export remaining unassigned units as fallback '00000000'
             remaining_qty = max(0, alloc.quantity - len(serials))
             for _ in range(remaining_qty):
                 writer.writerow([alloc.container_id, alloc.container_type or 'N/A', brand, model_name, sku, '00000000'])
@@ -516,7 +509,6 @@ def export_google_sheets():
 
         tsv_content = "\n".join(tsv_rows)
 
-        # Try updating/creating real Google Sheet via gspread if credentials are provided
         creds_file = os.environ.get('GOOGLE_SERVICE_ACCOUNT_FILE', 'service_account.json')
         if os.path.exists(creds_file):
             try:
@@ -569,26 +561,33 @@ def export_google_sheets():
 
 @app.route('/api/import/csv', methods=['POST'])
 def import_csv():
-    """Import and restore inventory records from exported CSV/TSV file or raw pasted text."""
+    """Import inventory records with three modes: add, subtract, and replace."""
     try:
+        mode = request.form.get('mode', 'add').lower()
         csv_text = None
+
         if 'file' in request.files and request.files['file'].filename != '':
             file = request.files['file']
             csv_text = file.read().decode('utf-8-sig', errors='replace')
         elif request.is_json:
             data = request.get_json() or {}
             csv_text = data.get('csv_content', '')
+            mode = data.get('mode', mode).lower()
         else:
             csv_text = request.form.get('csv_content', '')
 
         if not csv_text or not csv_text.strip():
             return jsonify({'success': False, 'error': 'No CSV or TSV data provided.'}), 400
 
-        # Reset all existing database records prior to restore population
-        SerialNumber.query.delete()
-        PhysicalAllocation.query.delete()
-        EquipmentModel.query.delete()
-        db.session.flush()
+        if mode not in ['add', 'subtract', 'replace']:
+            return jsonify({'success': False, 'error': 'Invalid import mode specified.'}), 400
+
+        # Replace mode purges existing records first
+        if mode == 'replace':
+            SerialNumber.query.delete()
+            PhysicalAllocation.query.delete()
+            EquipmentModel.query.delete()
+            db.session.flush()
 
         sample = csv_text[:2048]
         delimiter = '\t' if '\t' in sample and sample.count('\t') > sample.count(',') else ','
@@ -598,13 +597,10 @@ def import_csv():
 
         headers = None
         rows_processed = 0
-        models_created = 0
-        containers_created = 0
-        serials_created = 0
+        items_modified = 0
 
         model_cache = {}
         alloc_cache = {}
-        used_serials = set()
 
         for row in reader:
             if not row or not any(row):
@@ -647,60 +643,71 @@ def import_csv():
             container_id = container_id.upper()
             raw_serial_code = raw_serial_code.upper() if raw_serial_code else "00000000"
 
-            if sku not in model_cache:
+            if mode in ['add', 'replace']:
+                if sku not in model_cache:
+                    model = EquipmentModel.query.filter_by(sku=sku).first()
+                    if not model:
+                        model = EquipmentModel(model_name=model_name, sku=sku)
+                        db.session.add(model)
+                        db.session.flush()
+                    model_cache[sku] = model
+                else:
+                    model = model_cache[sku]
+
+                alloc_key = (model.id, container_id)
+                if alloc_key not in alloc_cache:
+                    alloc = PhysicalAllocation.query.filter_by(model_id=model.id, container_id=container_id).first()
+                    if not alloc:
+                        alloc = PhysicalAllocation(
+                            model_id=model.id,
+                            container_id=container_id,
+                            container_type=container_type,
+                            quantity=0
+                        )
+                        db.session.add(alloc)
+                        db.session.flush()
+                    alloc_cache[alloc_key] = alloc
+                else:
+                    alloc = alloc_cache[alloc_key]
+
+                final_sn = '00000000' if not raw_serial_code else raw_serial_code
+                new_sn = SerialNumber(
+                    serial_code=final_sn,
+                    model_id=model.id,
+                    location_id=alloc.id
+                )
+                db.session.add(new_sn)
+                alloc.quantity += 1
+                items_modified += 1
+
+            elif mode == 'subtract':
+                # Remove matching records if present
                 model = EquipmentModel.query.filter_by(sku=sku).first()
-                if not model:
-                    model = EquipmentModel(model_name=model_name, sku=sku)
-                    db.session.add(model)
-                    db.session.flush()
-                    models_created += 1
-                model_cache[sku] = model
-            else:
-                model = model_cache[sku]
+                if model:
+                    alloc = PhysicalAllocation.query.filter_by(model_id=model.id, container_id=container_id).first()
+                    if alloc:
+                        if raw_serial_code != '00000000':
+                            target_serial = SerialNumber.query.filter_by(
+                                location_id=alloc.id, 
+                                serial_code=raw_serial_code
+                            ).first()
+                        else:
+                            target_serial = SerialNumber.query.filter_by(location_id=alloc.id).first()
 
-            alloc_key = (model.id, container_id)
-            if alloc_key not in alloc_cache:
-                alloc = PhysicalAllocation.query.filter_by(model_id=model.id, container_id=container_id).first()
-                if not alloc:
-                    alloc = PhysicalAllocation(
-                        model_id=model.id,
-                        container_id=container_id,
-                        container_type=container_type,
-                        quantity=0
-                    )
-                    db.session.add(alloc)
-                    db.session.flush()
-                    containers_created += 1
-                alloc_cache[alloc_key] = alloc
-            else:
-                alloc = alloc_cache[alloc_key]
+                        if target_serial:
+                            db.session.delete(target_serial)
+                            alloc.quantity -= 1
+                            items_modified += 1
+                            
+                            if alloc.quantity <= 0:
+                                db.session.delete(alloc)
 
-            if not raw_serial_code or raw_serial_code == '00000000':
-                final_sn = '00000000'
-            else:
-                final_sn = raw_serial_code
-                used_serials.add(final_sn)
-
-            new_sn = SerialNumber(
-                serial_code=final_sn,
-                model_id=model.id,
-                location_id=alloc.id
-            )
-            db.session.add(new_sn)
-            alloc.quantity += 1
-            serials_created += 1
             rows_processed += 1
 
         db.session.commit()
 
-        return jsonify({
-            'success': True,
-            'rows_processed': rows_processed,
-            'models_created': models_created,
-            'containers_created': containers_created,
-            'serials_created': serials_created,
-            'message': f'Successfully restored {rows_processed} items into the matrix ledger!'
-        })
+        msg = f'Import completed ({mode.upper()} mode): {items_modified} units processed across {rows_processed} rows.'
+        return jsonify({'success': True, 'message': msg})
 
     except Exception as e:
         db.session.rollback()
