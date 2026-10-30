@@ -33,17 +33,20 @@ class SerialNumber(db.Model):
     __tablename__ = 'serial_numbers'
     
     id = db.Column(db.Integer, primary_key=True)
-    # FIX: Explicitly set unique=False so default placeholder barcodes ('00000000') can be reused
     serial_code = db.Column(db.String(100), nullable=False, unique=False, index=True)
     
+    # NEW: Flag to track soft-deleted / shipped items
+    is_shipped = db.Column(db.Boolean, default=False, nullable=False)
+    
     model_id = db.Column(db.Integer, db.ForeignKey('equipment_models.id', ondelete='CASCADE'), nullable=False)
-    location_id = db.Column(db.Integer, db.ForeignKey('physical_allocations.id', ondelete='CASCADE'), nullable=False)
+    location_id = db.Column(db.Integer, db.ForeignKey('physical_allocations.id', ondelete='CASCADE'), nullable=True)
 
     def to_dict(self):
         return {
             'id': self.id,
             'serial_code': self.serial_code,
             'model_id': self.model_id,
+            'is_shipped': self.is_shipped,
             'location_id': self.location_id,
-            'container_id': self.location.container_id if self.location else "Unassigned"
+            'container_id': "Shipped" if self.is_shipped else (self.location.container_id if self.location else "Unassigned")
         }

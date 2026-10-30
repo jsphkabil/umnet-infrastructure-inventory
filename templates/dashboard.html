@@ -63,10 +63,13 @@
                 <!-- LEVEL 1 HEADER: TABS SWITCHER -->
                 <div class="flex border-b border-slate-200 bg-slate-100 p-1.5 space-x-1 h-12 items-center">
                     <button id="tab-models" onclick="switchSidebarView('models')" class="w-full h-full text-center py-1.5 text-xs font-bold rounded-lg transition-all bg-white text-michigan-blue shadow-xs border border-slate-200/50 flex items-center justify-center">
-                        View by Model / SKU
+                        View by Model
                     </button>
                     <button id="tab-locations" onclick="switchSidebarView('locations')" class="w-full h-full text-center py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-michigan-blue hover:bg-slate-50 flex items-center justify-center">
-                        View by Container
+                        View Container
+                    </button>
+                    <button id="tab-shipped" onclick="switchSidebarView('shipped')" class="w-full h-full text-center py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-michigan-blue hover:bg-slate-50 flex items-center justify-center">
+                        View Shipped
                     </button>
                 </div>
 
@@ -185,6 +188,44 @@
             </section>
         </div>
     </main>
+
+    <!-- MODAL: EDIT SERIAL & RELOCATE -->
+    <div id="edit-serial-modal" class="fixed inset-0 z-50 overflow-y-auto hidden">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-michigan-blue/40 backdrop-blur-xs" onclick="toggleModal('edit-serial-modal')"></div>
+            <div class="inline-block bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-md sm:w-full border border-slate-200 z-10">
+                <form onsubmit="submitEditSerial(event)">
+                    <input type="hidden" id="edit-serial-id">
+                    
+                    <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                        <h3 class="font-bold text-michigan-blue text-sm uppercase tracking-wide">Edit Serial & Device Location</h3>
+                        <button type="button" onclick="toggleModal('edit-serial-modal')" class="text-slate-400 hover:text-slate-600 text-lg">×</button>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Serial Code / Barcode</label>
+                            <input type="text" id="edit-serial-code" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Target Storage Node / Container ID</label>
+                            <input type="text" id="edit-serial-container" placeholder="e.g. PALLET-04 or SHELF-B3" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Container Type</label>
+                            <select id="edit-serial-container-type" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none">
+                                <option value="Storage Shelf">Storage Shelf</option>
+                                <option value="Pallet Array">Pallet Array</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end space-x-2">
+                        <button type="button" onclick="toggleModal('edit-serial-modal')" class="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
+                        <button type="submit" class="px-4 py-2 text-xs font-bold text-michigan-blue bg-michigan-maize rounded-lg hover:bg-yellow-400 shadow-sm">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <!-- MODAL 1: REGISTER SKU -->
     <div id="add-sku-modal" class="fixed inset-0 z-50 overflow-y-auto hidden">
@@ -341,9 +382,16 @@
                     <label id="custom-dialog-input-label" class="block text-xs font-bold text-slate-500 uppercase mb-1">Input</label>
                     <input type="text" id="custom-dialog-input" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none font-mono">
                 </div>
-                <div id="custom-dialog-select-container" class="hidden">
+                <div id="custom-dialog-select-container" class="hidden space-y-2">
                     <label id="custom-dialog-select-label" class="block text-xs font-bold text-slate-500 uppercase mb-1">Select Serial to Remove</label>
-                    <select id="custom-dialog-select" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none font-mono">
+                    <input type="text" 
+                        id="custom-dialog-select-search" 
+                        placeholder="Type to filter serial code..." 
+                        oninput="filterDialogSelectOptions()" 
+                        class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none">
+                    <select id="custom-dialog-select" 
+                            size="5" 
+                            class="w-full px-2 py-1 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-michigan-blue/20 focus:border-michigan-blue focus:outline-none font-mono overflow-y-auto">
                     </select>
                 </div>
                 <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
@@ -410,6 +458,32 @@
             }, 3500);
         }
 
+        let currentDialogOptions = [];
+
+        function filterDialogSelectOptions() {
+            const searchVal = document.getElementById('custom-dialog-select-search').value.toLowerCase().trim();
+            const selectEl = document.getElementById('custom-dialog-select');
+            selectEl.innerHTML = '';
+
+            const filtered = currentDialogOptions.filter(opt => opt.label.toLowerCase().includes(searchVal));
+
+            if (filtered.length === 0) {
+                const noOpt = document.createElement('option');
+                noOpt.disabled = true;
+                noOpt.textContent = 'No matching serials found';
+                selectEl.appendChild(noOpt);
+                return;
+            }
+
+            filtered.forEach((opt, idx) => {
+                const optEl = document.createElement('option');
+                optEl.value = opt.value;
+                optEl.textContent = opt.label;
+                if (idx === 0) optEl.selected = true; // Auto-select first matching result
+                selectEl.appendChild(optEl);
+            });
+        }
+
         function showCustomDialog(options) {
             return new Promise((resolve) => {
                 const modal = document.getElementById('custom-dialog-modal');
@@ -419,7 +493,7 @@
                 const inputLabel = document.getElementById('custom-dialog-input-label');
                 const inputEl = document.getElementById('custom-dialog-input');
                 const selectContainer = document.getElementById('custom-dialog-select-container');
-                const selectEl = document.getElementById('custom-dialog-select');
+                const searchEl = document.getElementById('custom-dialog-select-search');
                 const cancelBtn = document.getElementById('custom-dialog-cancel-btn');
                 const confirmBtn = document.getElementById('custom-dialog-confirm-btn');
 
@@ -437,15 +511,15 @@
 
                 if (options.optionsList && options.optionsList.length > 0) {
                     selectContainer.classList.remove('hidden');
-                    selectEl.innerHTML = '';
-                    options.optionsList.forEach(opt => {
-                        const optEl = document.createElement('option');
-                        optEl.value = opt.value;
-                        optEl.textContent = opt.label;
-                        selectEl.appendChild(optEl);
-                    });
+                    currentDialogOptions = options.optionsList;
+                    if (searchEl) searchEl.value = '';
+                    filterDialogSelectOptions();
+                    
+                    // Auto-focus the search box when dialog opens
+                    setTimeout(() => { if (searchEl) searchEl.focus(); }, 50);
                 } else {
                     selectContainer.classList.add('hidden');
+                    currentDialogOptions = [];
                 }
 
                 if (options.showCancel) {
@@ -463,6 +537,7 @@
                 };
 
                 confirmBtn.onclick = () => {
+                    const selectEl = document.getElementById('custom-dialog-select');
                     cleanup();
                     if (options.optionsList && options.optionsList.length > 0) {
                         resolve(selectEl.value);
@@ -609,20 +684,15 @@
         function switchSidebarView(mode) {
             activeSidebarViewMode = mode;
 
-            // 1. Clear the search input text
             const searchInput = document.getElementById('catalog-search-input');
-            if (searchInput) {
-                searchInput.value = '';
-            }
+            if (searchInput) searchInput.value = '';
 
-            // 2. Reset visibility on all model and location list rows
             document.querySelectorAll('.catalog-row, .location-row').forEach(row => {
                 row.style.display = '';
             });
 
             updateRegisterBtnVisibility();
             
-            // Clear serial search results dropdown if active
             const searchResultsContainer = document.getElementById('serial-search-results');
             if (searchResultsContainer) {
                 searchResultsContainer.innerHTML = '';
@@ -631,25 +701,84 @@
             
             const btnModels = document.getElementById('tab-models');
             const btnLocations = document.getElementById('tab-locations');
+            const btnShipped = document.getElementById('tab-shipped');
             const listModels = document.getElementById('sidebar-models-list');
             const listLocations = document.getElementById('sidebar-locations-list');
 
+            const activeStyle = "w-full h-full text-center py-1.5 text-xs font-bold rounded-lg transition-all bg-white text-michigan-blue shadow-xs border border-slate-200/50 flex items-center justify-center";
+            const inactiveStyle = "w-full h-full text-center py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-michigan-blue hover:bg-slate-50 flex items-center justify-center";
+
             if (mode === 'models') {
-                btnModels.className = "w-full h-full text-center py-1.5 text-xs font-bold rounded-lg transition-all bg-white text-michigan-blue shadow-xs border border-slate-200/50 flex items-center justify-center";
-                btnLocations.className = "w-full h-full text-center py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-michigan-blue hover:bg-slate-50 flex items-center justify-center";
+                btnModels.className = activeStyle;
+                btnLocations.className = inactiveStyle;
+                btnShipped.className = inactiveStyle;
                 listModels.classList.remove('hidden');
                 listLocations.classList.add('hidden');
                 
                 const firstItem = listModels.querySelector('.catalog-row');
                 if (firstItem) firstItem.click();
-            } else {
-                btnLocations.className = "w-full h-full text-center py-1.5 text-xs font-bold rounded-lg transition-all bg-white text-michigan-blue shadow-xs border border-slate-200/50 flex items-center justify-center";
-                btnModels.className = "w-full h-full text-center py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-michigan-blue hover:bg-slate-50 flex items-center justify-center";
+            } else if (mode === 'locations') {
+                btnLocations.className = activeStyle;
+                btnModels.className = inactiveStyle;
+                btnShipped.className = inactiveStyle;
                 listLocations.classList.remove('hidden');
                 listModels.classList.add('hidden');
                 
                 rebuildLocationSidebarTree();
+            } else if (mode === 'shipped') {
+                btnShipped.className = activeStyle;
+                btnModels.className = inactiveStyle;
+                btnLocations.className = inactiveStyle;
+                listModels.classList.add('hidden');
+                listLocations.classList.add('hidden');
+
+                focusShippedContainer();
             }
+        }
+
+        function focusShippedContainer() {
+            currentFocusedLocationId = 'SHIPPED';
+            currentFocusedModelId = null;
+            
+            document.getElementById('empty-state-panel').classList.add('hidden');
+            document.getElementById('active-management-panel').classList.remove('hidden');
+            document.getElementById('location-assignment-footer').classList.add('hidden'); 
+            document.getElementById('target-view-context-badge').innerText = "Shipped Manifest";
+            document.getElementById('matrix-grid-title').innerText = "Shipped / Dispatched Devices";
+            document.getElementById('delete-container-btn').classList.add('hidden');
+            document.getElementById('delete-model-btn').classList.add('hidden');
+            document.getElementById('add-serial-btn').classList.add('hidden');
+
+            fetch('/api/shipped/items')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('target-display-name').innerText = "Container ID: SHIPPED";
+                    document.getElementById('target-display-count').innerText = data.total_items;
+                    
+                    const grid = document.getElementById('dynamic-grid-cards-container');
+                    grid.innerHTML = '';
+                    
+                    if (!data.serials || data.serials.length === 0) {
+                        grid.innerHTML = `<div class="col-span-full p-12 text-center text-xs text-slate-400 bg-slate-50 border border-dashed rounded-xl">No serial numbers have been subtracted or shipped yet.</div>`;
+                    } else {
+                        data.serials.forEach(item => {
+                            grid.innerHTML += `
+                                <div class="border border-slate-200 rounded-lg p-3 bg-white shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between space-y-1">
+                                    <div class="flex justify-between items-start gap-2">
+                                        <div class="truncate">
+                                            <span class="font-mono text-xs font-bold text-michigan-blue block truncate">${item.serial_code}</span>
+                                            <h4 class="font-bold text-slate-800 text-xs leading-tight mt-0.5">${item.model_name}</h4>
+                                            <p class="text-[10px] text-slate-400 font-mono mt-0.5">PN: ${item.sku}</p>
+                                        </div>
+                                        <span class="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 rounded">Shipped</span>
+                                    </div>
+                                </div>`;
+                        });
+                    }
+
+                    renderSerialList([]);
+                })
+                .catch(err => console.error(err));
         }
 
         function rebuildLocationSidebarTree() {
@@ -849,9 +978,12 @@
                     : (s.container_type ? 'bg-michigan-blue text-white' : 'bg-slate-100 text-slate-500');
 
                 container.innerHTML += `
-                    <div class="flex items-center justify-between bg-white border border-slate-200 rounded-lg p-2 shadow-2xs">
-                        <div class="truncate pr-2">
-                            <span class="font-mono text-xs font-bold text-slate-800 block truncate">${s.serial_code}</span>
+                    <div class="flex items-center justify-between bg-white border border-slate-200 rounded-lg p-2 shadow-2xs hover:border-michigan-blue transition-all group">
+                        <div onclick="openEditSerialModal('${s.id}', '${s.serial_code}', '${locationLabel}', '${s.container_type || 'Storage Shelf'}')" class="truncate pr-2 cursor-pointer flex-grow">
+                            <div class="flex items-center space-x-1">
+                                <span class="font-mono text-xs font-bold text-slate-800 block truncate group-hover:text-michigan-blue transition-colors">${s.serial_code}</span>
+                                <span class="text-[10px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">✏️</span>
+                            </div>
                             <div class="mt-1">
                                 <span class="px-1.5 py-0.5 text-[10px] font-mono font-bold tracking-wider ${badgeStyle} rounded inline-block">
                                     ${locationLabel}
@@ -863,6 +995,52 @@
                         </button>
                     </div>`;
             });
+        }
+
+        function openEditSerialModal(id, serialCode, containerId, containerType) {
+            document.getElementById('edit-serial-id').value = id;
+            document.getElementById('edit-serial-code').value = serialCode;
+            document.getElementById('edit-serial-container').value = containerId === 'Unassigned' ? '' : containerId;
+            document.getElementById('edit-serial-container-type').value = containerType || 'Storage Shelf';
+            toggleModal('edit-serial-modal');
+        }
+
+        async function submitEditSerial(e) {
+            e.preventDefault();
+            const serialId = document.getElementById('edit-serial-id').value;
+            const serialCode = document.getElementById('edit-serial-code').value.trim();
+            const containerId = document.getElementById('edit-serial-container').value.trim();
+            const containerType = document.getElementById('edit-serial-container-type').value;
+
+            if (!serialId || !serialCode || !containerId) {
+                showToast("Please fill out all fields.", "warning");
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/serials/${serialId}/update`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        serial_code: serialCode,
+                        container_id: containerId,
+                        container_type: containerType
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    showToast(data.error || "Failed to update device.", "error");
+                    return;
+                }
+
+                toggleModal('edit-serial-modal');
+                showToast("Device updated successfully.", "info");
+                refreshActiveView();
+            } catch (err) {
+                console.error(err);
+                showToast("Server error while updating device.", "error");
+            }
         }
 
         async function handleIncrement(allocId) {

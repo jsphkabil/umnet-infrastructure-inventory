@@ -108,8 +108,8 @@ def get_model_locations(model_id):
 
 @app.route('/api/allocation/<int:alloc_id>/serials', methods=['GET'])
 def get_allocation_serials(alloc_id):
-    """Fetch all serial numbers associated with a specific allocation container."""
-    serials = SerialNumber.query.filter_by(location_id=alloc_id).all()
+    """Fetch all active serial numbers associated with a specific allocation container."""
+    serials = SerialNumber.query.filter_by(location_id=alloc_id, is_shipped=False).all()
     return jsonify({
         'success': True, 
         'serials': [format_serial(s) for s in serials]
@@ -117,13 +117,14 @@ def get_allocation_serials(alloc_id):
 
 @app.route('/api/serials/search', methods=['GET'])
 def search_serial():
-    """Search registered serial numbers by barcode string."""
+    """Search registered active serial numbers by barcode string."""
     query = request.args.get('q', '').strip()
     if not query:
         return jsonify({'success': True, 'results': []})
 
     serials = SerialNumber.query.filter(
-        SerialNumber.serial_code.ilike(f"%{query}%")
+        SerialNumber.serial_code.ilike(f"%{query}%"),
+        SerialNumber.is_shipped == False
     ).all()
 
     results = []
@@ -195,27 +196,19 @@ def update_quantity(alloc_id):
         if serial_id_to_remove:
             target_serial = SerialNumber.query.get(serial_id_to_remove)
             if target_serial:
-                db.session.delete(target_serial)
+                target_serial.is_shipped = True
+                target_serial.location_id = None
         else:
-            fallback_serial = SerialNumber.query.filter_by(location_id=allocation.id).first()
+            fallback_serial = SerialNumber.query.filter_by(location_id=allocation.id, is_shipped=False).first()
             if fallback_serial:
-                db.session.delete(fallback_serial)
+                fallback_serial.is_shipped = True
+                fallback_serial.location_id = None
         
         is_purged = allocation.quantity <= 0
         if is_purged:
             db.session.delete(allocation)
 
         db.session.commit()
-        
-        model_obj = EquipmentModel.query.get(model_id)
-        new_global = model_obj.global_total if model_obj else 0
-        
-        return jsonify({
-            'success': True, 
-            'new_quantity': 0 if is_purged else allocation.quantity,
-            'new_global_total': new_global,
-            'model_id': model_id
-        })
 
     return jsonify({'success': False, 'error': 'Invalid request parameters'}), 400
 
@@ -558,6 +551,76 @@ def export_google_sheets():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/serials/<int:serial_id>/update', methods=['POST'])
+def update_serial(serial_id):
+    """Update serial number code and/or relocate device to a new container."""
+    data = request.get_json() or {}
+    new_serial_code = data.get('serial_code', '').strip().upper()
+    new_container_id = data.get('container_id', '').strip().upper()
+    new_container_type = data.get('container_type', 'Storage Shelf').strip()
+
+    serial = SerialNumber.query.get_or_404(serial_id)
+    old_alloc = serial.location
+    model_id = serial.model_id
+
+    # 1. Update Serial Code if provided and different
+    if new_serial_code:
+        if new_serial_code != '00000000' and new_serial_code != serial.serial_code:
+            existing = SerialNumber.query.filter(
+                SerialNumber.serial_code == new_serial_code,
+                SerialNumber.id != serial_id
+            ).first()
+            if existing:
+                return jsonify({'success': False, 'error': f'Serial number {new_serial_code} already exists!'}), 400
+        serial.serial_code = new_serial_code
+
+    # 2. Relocate Device if container changed
+    if new_container_id and (not old_alloc or old_alloc.container_id != new_container_id):
+        # Find or create target allocation
+        target_alloc = PhysicalAllocation.query.filter_by(
+            model_id=model_id, 
+            container_id=new_container_id
+        ).first()
+
+        if not target_alloc:
+            target_alloc = PhysicalAllocation(
+                model_id=model_id,
+                container_id=new_container_id,
+                container_type=new_container_type,
+                quantity=0
+            )
+            db.session.add(target_alloc)
+            db.session.flush()
+
+        # Re-assign serial location ID explicitly
+        serial.location_id = target_alloc.id
+        target_alloc.quantity += 1
+
+        # Decrement old allocation quantity
+        if old_alloc:
+            old_alloc.quantity -= 1
+
+        # Commit location & serial updates FIRST before purging empty allocation
+        db.session.commit()
+
+        # Clean up old allocation if empty
+        if old_alloc and old_alloc.quantity <= 0:
+            # Re-fetch old allocation to ensure safe deletion without cascading onto moved serials
+            alloc_to_delete = PhysicalAllocation.query.get(old_alloc.id)
+            if alloc_to_delete and alloc_to_delete.quantity <= 0:
+                db.session.delete(alloc_to_delete)
+                db.session.commit()
+    else:
+        db.session.commit()
+
+    model_obj = EquipmentModel.query.get(model_id)
+    return jsonify({
+        'success': True,
+        'message': 'Serial record updated successfully.',
+        'serial': format_serial(serial),
+        'model_id': model_id,
+        'new_global_total': model_obj.global_total if model_obj else 0
+    })
 
 @app.route('/api/import/csv', methods=['POST'])
 def import_csv():
@@ -681,7 +744,6 @@ def import_csv():
                 items_modified += 1
 
             elif mode == 'subtract':
-                # Remove matching records if present
                 model = EquipmentModel.query.filter_by(sku=sku).first()
                 if model:
                     alloc = PhysicalAllocation.query.filter_by(model_id=model.id, container_id=container_id).first()
@@ -689,13 +751,15 @@ def import_csv():
                         if raw_serial_code != '00000000':
                             target_serial = SerialNumber.query.filter_by(
                                 location_id=alloc.id, 
-                                serial_code=raw_serial_code
+                                serial_code=raw_serial_code,
+                                is_shipped=False
                             ).first()
                         else:
-                            target_serial = SerialNumber.query.filter_by(location_id=alloc.id).first()
+                            target_serial = SerialNumber.query.filter_by(location_id=alloc.id, is_shipped=False).first()
 
                         if target_serial:
-                            db.session.delete(target_serial)
+                            target_serial.is_shipped = True
+                            target_serial.location_id = None
                             alloc.quantity -= 1
                             items_modified += 1
                             
@@ -712,6 +776,27 @@ def import_csv():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/shipped/items', methods=['GET'])
+def get_shipped_items():
+    """Retrieve all serial numbers marked as shipped across all models."""
+    shipped_serials = SerialNumber.query.filter_by(is_shipped=True).all()
+    
+    items = []
+    for s in shipped_serials:
+        items.append({
+            'serial_id': s.id,
+            'serial_code': s.serial_code,
+            'model_id': s.model_id,
+            'model_name': s.model.model_name if s.model else 'Unknown Model',
+            'sku': s.model.sku if s.model else 'N/A'
+        })
+        
+    return jsonify({
+        'container_id': 'SHIPPED',
+        'total_items': len(items),
+        'serials': items
+    })
 
 
 if __name__ == '__main__':
