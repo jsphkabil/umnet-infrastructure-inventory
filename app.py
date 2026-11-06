@@ -127,15 +127,18 @@ def get_allocation_serials(alloc_id):
 
 @app.route('/api/serials/search', methods=['GET'])
 def search_serial():
-    """Search registered active serial numbers by barcode string."""
+    """Search registered serial numbers by barcode string."""
     query = request.args.get('q', '').strip()
+    include_shipped = request.args.get('include_shipped', 'false').lower() == 'true'
+
     if not query:
         return jsonify({'success': True, 'results': []})
 
-    serials = SerialNumber.query.filter(
-        SerialNumber.serial_code.ilike(f"%{query}%"),
-        SerialNumber.is_shipped == False
-    ).all()
+    filter_criteria = [SerialNumber.serial_code.ilike(f"%{query}%")]
+    if not include_shipped:
+        filter_criteria.append(SerialNumber.is_shipped == False)
+
+    serials = SerialNumber.query.filter(*filter_criteria).all()
 
     results = []
     for s in serials:
@@ -145,7 +148,8 @@ def search_serial():
             'model_id': s.model_id,
             'model_name': s.model.model_name if s.model else 'Unknown',
             'sku': s.model.sku if s.model else 'N/A',
-            'container_id': s.location.container_id if s.location else 'Unassigned',
+            'is_shipped': s.is_shipped,
+            'container_id': "SHIPPED" if s.is_shipped else (s.location.container_id if s.location else 'Unassigned'),
             'container_type': s.location.container_type if s.location else None
         })
 
@@ -154,7 +158,7 @@ def search_serial():
 
 @app.route('/api/allocation/<int:alloc_id>/update', methods=['POST'])
 def update_quantity(alloc_id):
-    """Increment or decrement staged quantity and synchronize serial records."""
+    """Increment or decrement staged quantity, support container relocation, and sync serials."""
     data = request.get_json() or {}
     action = data.get('action')
     
@@ -163,7 +167,6 @@ def update_quantity(alloc_id):
     
     if action == 'increment':
         raw_code = data.get('serial_code', '').strip().upper()
-        
         if not raw_code or raw_code == '00000000':
             serial_code = '00000000'
         else:
@@ -176,7 +179,6 @@ def update_quantity(alloc_id):
             serial_code = raw_code
         
         allocation.quantity += 1
-        
         new_serial = SerialNumber(
             serial_code=serial_code,
             model_id=allocation.model_id,
@@ -185,7 +187,7 @@ def update_quantity(alloc_id):
         db.session.add(new_serial)
         db.session.commit()
         
-        model_obj = EquipmentModel.query.get(model_id)
+        model_obj = db.session.get(EquipmentModel, model_id)
         new_global = model_obj.global_total if model_obj else 0
         
         return jsonify({
@@ -197,25 +199,45 @@ def update_quantity(alloc_id):
         
     elif action == 'decrement':
         serial_id_to_remove = data.get('serial_id')
+        relocated_container = data.get('relocated_container', '').strip().upper()
         
         if allocation.quantity <= 0:
             return jsonify({'success': False, 'error': 'Quantity is already at zero.'}), 400
             
         allocation.quantity -= 1
         
+        target_serial = None
         if serial_id_to_remove:
             target_serial = db.session.get(SerialNumber, serial_id_to_remove)
-            if target_serial:
+        else:
+            target_serial = SerialNumber.query.filter_by(location_id=allocation.id, is_shipped=False).first()
+
+        if target_serial:
+            if relocated_container:
+                # Find or create relocation container target
+                target_alloc = PhysicalAllocation.query.filter_by(
+                    model_id=model_id,
+                    container_id=relocated_container
+                ).first()
+                if not target_alloc:
+                    target_alloc = PhysicalAllocation(
+                        model_id=model_id,
+                        container_id=relocated_container,
+                        container_type='Storage Shelf',
+                        quantity=0
+                    )
+                    db.session.add(target_alloc)
+                    db.session.flush()
+
+                target_serial.location_id = target_alloc.id
+                target_serial.is_shipped = False
+                target_alloc.quantity += 1
+            else:
+                # Ship item if no destination entered
                 target_serial.is_shipped = True
                 target_serial.location_id = None
-        else:
-            fallback_serial = SerialNumber.query.filter_by(location_id=allocation.id, is_shipped=False).first()
-            if fallback_serial:
-                fallback_serial.is_shipped = True
-                fallback_serial.location_id = None
-        
-        is_purged = allocation.quantity <= 0
-        if is_purged:
+
+        if allocation.quantity <= 0:
             db.session.delete(allocation)
 
         db.session.commit()
@@ -223,10 +245,9 @@ def update_quantity(alloc_id):
         model_obj = db.session.get(EquipmentModel, model_id)
         new_global = model_obj.global_total if model_obj else 0
 
-        # FIX: Explicit success response for decrement action
         return jsonify({
-            'success': True,
-            'new_quantity': 0 if is_purged else allocation.quantity,
+            'success': True, 
+            'new_quantity': 0 if allocation.quantity <= 0 else allocation.quantity,
             'new_global_total': new_global,
             'model_id': model_id
         })
@@ -813,7 +834,9 @@ def get_shipped_items():
             'serial_code': s.serial_code,
             'model_id': s.model_id,
             'model_name': s.model.model_name if s.model else 'Unknown Model',
-            'sku': s.model.sku if s.model else 'N/A'
+            'sku': s.model.sku if s.model else 'N/A',
+            'is_shipped': True,
+            'container_id': 'SHIPPED'
         })
         
     return jsonify({

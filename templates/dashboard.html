@@ -479,9 +479,17 @@
                 const optEl = document.createElement('option');
                 optEl.value = opt.value;
                 optEl.textContent = opt.label;
-                if (idx === 0) optEl.selected = true; // Auto-select first matching result
+                if (idx === 0) optEl.selected = true;
                 selectEl.appendChild(optEl);
             });
+
+            // Handle click on options to sync selected value into search input
+            selectEl.onchange = () => {
+                const selectedText = selectEl.options[selectEl.selectedIndex]?.text;
+                if (selectedText) {
+                    document.getElementById('custom-dialog-select-search').value = selectedText;
+                }
+            };
         }
 
         function showCustomDialog(options) {
@@ -619,6 +627,51 @@
             const searchResultsContainer = document.getElementById('serial-search-results');
             searchResultsContainer.innerHTML = '';
             searchResultsContainer.classList.add('hidden');
+
+            if (activeSidebarViewMode === 'shipped') {
+                // Filter shipped cards and registered serial items by model name or SKU match
+                document.querySelectorAll('.shipped-card, .serial-item-card').forEach(card => {
+                    const modelText = card.getAttribute('data-model') || '';
+                    const skuText = card.getAttribute('data-sku') || '';
+                    const cardText = card.innerText.toLowerCase();
+                    
+                    if (query === '' || cardText.includes(query) || modelText.includes(query) || skuText.includes(query)) {
+                        card.style.display = '';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+
+                // Fetch matching serial barcodes dynamically if query length >= 2
+                if (query.length >= 2) {
+                    clearTimeout(serialSearchDebounce);
+                    serialSearchDebounce = setTimeout(() => {
+                        fetch(`/api/serials/search?q=${encodeURIComponent(query)}&include_shipped=true`)
+                            .then(res => res.json())
+                            .then(data => {
+                                if (data.success && data.results.length > 0) {
+                                    searchResultsContainer.classList.remove('hidden');
+                                    searchResultsContainer.innerHTML = `<p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1 my-1">Matched Serials (${data.results.length})</p>`;
+                                    
+                                    data.results.forEach(res => {
+                                        searchResultsContainer.innerHTML += `
+                                            <div class="p-2 hover:bg-amber-50 rounded-lg cursor-pointer transition-all border border-slate-200 bg-white shadow-2xs flex justify-between items-center group">
+                                                <div class="truncate pr-1">
+                                                    <span class="font-mono text-xs font-bold text-michigan-blue block truncate">${res.serial_code}</span>
+                                                    <span class="text-[10px] text-slate-500 block truncate">${res.model_name}</span>
+                                                </div>
+                                                <span class="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-slate-100 text-slate-600 rounded shrink-0">
+                                                    ${res.container_id}
+                                                </span>
+                                            </div>`;
+                                    });
+                                }
+                            })
+                            .catch(err => console.error(err));
+                    }, 250);
+                }
+                return;
+            }
 
             const selector = activeSidebarViewMode === 'models' ? '.catalog-row' : '.location-row';
             document.querySelectorAll(selector).forEach(row => {
@@ -765,20 +818,20 @@
                     } else {
                         data.serials.forEach(item => {
                             grid.innerHTML += `
-                                <div class="border border-slate-200 rounded-lg p-3 bg-white shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between space-y-1">
+                                <div class="shipped-card border border-slate-200 rounded-lg p-3 bg-white shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between space-y-1" data-model="${item.model_name.toLowerCase()}" data-sku="${item.sku.toLowerCase()}">
                                     <div class="flex justify-between items-start gap-2">
                                         <div class="truncate">
                                             <span class="font-mono text-xs font-bold text-michigan-blue block truncate">${item.serial_code}</span>
                                             <h4 class="font-bold text-slate-800 text-xs leading-tight mt-0.5">${item.model_name}</h4>
                                             <p class="text-[10px] text-slate-400 font-mono mt-0.5">PN: ${item.sku}</p>
                                         </div>
-                                        <span class="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 rounded">Shipped</span>
+                                        <span class="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 rounded">${item.container_id || 'Shipped'}</span>
                                     </div>
                                 </div>`;
                         });
                     }
 
-                    renderSerialList([]);
+                    renderSerialList(data.serials || []);
                 })
                 .catch(err => console.error(err));
         }
@@ -977,6 +1030,13 @@
                 return;
             }
 
+            // Sort list alphabetically by location / container identifier
+            serials.sort((a, b) => {
+                const locA = (a.container_id || 'Unassigned').toUpperCase();
+                const locB = (b.container_id || 'Unassigned').toUpperCase();
+                return locA.localeCompare(locB);
+            });
+
             serials.forEach(s => {
                 const locationLabel = s.container_id || 'Unassigned';
                 
@@ -984,12 +1044,14 @@
                     ? 'bg-michigan-maize text-michigan-blue border border-amber-400' 
                     : (s.container_type ? 'bg-michigan-blue text-white' : 'bg-slate-100 text-slate-500');
 
+                const shippedTag = s.is_shipped ? '<span class="ml-1 px-1 py-0.2 text-[8px] bg-red-100 text-red-700 font-bold rounded">SHIPPED</span>' : '';
+
                 container.innerHTML += `
-                    <div class="flex items-center justify-between bg-white border border-slate-200 rounded-lg p-2 shadow-2xs hover:border-michigan-blue transition-all group">
+                    <div class="serial-item-card flex items-center justify-between bg-white border border-slate-200 rounded-lg p-2 shadow-2xs hover:border-michigan-blue transition-all group" data-model="${(s.model_name || '').toLowerCase()}">
                         <div onclick="openEditSerialModal('${s.id}', '${s.serial_code}', '${locationLabel}', '${s.container_type || 'Storage Shelf'}')" class="truncate pr-2 cursor-pointer flex-grow">
                             <div class="flex items-center space-x-1">
                                 <span class="font-mono text-xs font-bold text-slate-800 block truncate group-hover:text-michigan-blue transition-colors">${s.serial_code}</span>
-                                <span class="text-[10px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">✏️</span>
+                                ${shippedTag}
                             </div>
                             <div class="mt-1">
                                 <span class="px-1.5 py-0.5 text-[10px] font-mono font-bold tracking-wider ${badgeStyle} rounded inline-block">
@@ -1107,8 +1169,8 @@
                     }));
 
                     const selectedValue = await showCustomDialog({
-                        title: "Remove Staged Unit",
-                        message: "Select the specific Serial Barcode record to remove from this location container:",
+                        title: "Remove / Relocate Staged Unit",
+                        message: "Select the specific Serial Barcode record to remove from this container:",
                         optionsList: optionsList,
                         showCancel: true
                     });
@@ -1117,12 +1179,25 @@
                     serialIdToRemove = selectedValue;
                 }
 
+                // Prompt for optional relocation destination
+                const destinationContainer = await showCustomDialog({
+                    title: "Specify Destination Container (Optional)",
+                    message: "Enter target container ID (e.g. PALLET-02, SHELF-B1).\n\n* Leave blank to mark as SHIPPED.",
+                    hasInput: true,
+                    inputLabel: "Target Storage Node",
+                    defaultValue: "",
+                    showCancel: true
+                });
+
+                if (destinationContainer === null) return; // User cancelled
+
                 const response = await fetch(`/api/allocation/${allocId}/update`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'decrement',
-                        serial_id: serialIdToRemove
+                        serial_id: serialIdToRemove,
+                        relocated_container: destinationContainer.trim().toUpperCase()
                     })
                 });
 
@@ -1136,7 +1211,7 @@
                     updateSidebarGlobalCount(data.model_id, data.new_global_total);
                 }
 
-                showToast("Unit successfully removed.", "info");
+                showToast(destinationContainer.trim() ? "Unit relocated." : "Unit shipped.", "info");
                 refreshActiveView();
             } catch (err) {
                 console.error(err);
