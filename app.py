@@ -12,10 +12,19 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 
 def fix_legacy_sqlite_unique_constraint():
-    """Detect and repair legacy SQLite table schema if serial_code has an old UNIQUE constraint on disk."""
+    """Detect and repair legacy SQLite table schema including location_id NULL constraints."""
     try:
+        # 1. Ensure is_shipped column exists
+        columns_info = db.session.execute(text("PRAGMA table_info(serial_numbers);")).fetchall()
+        column_names = [col[1] for col in columns_info]
+        
+        if 'is_shipped' not in column_names:
+            db.session.execute(text("ALTER TABLE serial_numbers ADD COLUMN is_shipped BOOLEAN NOT NULL DEFAULT 0;"))
+            db.session.commit()
+
+        # 2. Recreate serial_numbers table if location_id is NOT NULL or serial_code has unique constraint
         schema_info = db.session.execute(text("SELECT sql FROM sqlite_master WHERE type='table' AND name='serial_numbers'")).scalar()
-        if schema_info and 'UNIQUE' in schema_info.upper() and 'SERIAL_CODE' in schema_info.upper():
+        if schema_info and ('NOT NULL' in schema_info.upper() and 'LOCATION_ID' in schema_info.upper()):
             db.session.execute(text("CREATE TABLE IF NOT EXISTS serial_numbers_backup AS SELECT * FROM serial_numbers;"))
             db.session.execute(text("DROP TABLE serial_numbers;"))
             db.session.commit()
@@ -23,13 +32,14 @@ def fix_legacy_sqlite_unique_constraint():
             db.create_all()
             
             db.session.execute(text("""
-                INSERT INTO serial_numbers (id, serial_code, model_id, location_id)
-                SELECT id, serial_code, model_id, location_id FROM serial_numbers_backup;
+                INSERT INTO serial_numbers (id, serial_code, is_shipped, model_id, location_id)
+                SELECT id, serial_code, is_shipped, model_id, location_id FROM serial_numbers_backup;
             """))
             db.session.execute(text("DROP TABLE serial_numbers_backup;"))
             db.session.commit()
     except Exception as e:
         db.session.rollback()
+        print(f"Migration notice: {e}")
 
 def seed_database_if_empty():
     """Seed initial database records if equipment matrix is empty."""
@@ -194,7 +204,7 @@ def update_quantity(alloc_id):
         allocation.quantity -= 1
         
         if serial_id_to_remove:
-            target_serial = SerialNumber.query.get(serial_id_to_remove)
+            target_serial = db.session.get(SerialNumber, serial_id_to_remove)
             if target_serial:
                 target_serial.is_shipped = True
                 target_serial.location_id = None
@@ -209,6 +219,17 @@ def update_quantity(alloc_id):
             db.session.delete(allocation)
 
         db.session.commit()
+
+        model_obj = db.session.get(EquipmentModel, model_id)
+        new_global = model_obj.global_total if model_obj else 0
+
+        # FIX: Explicit success response for decrement action
+        return jsonify({
+            'success': True,
+            'new_quantity': 0 if is_purged else allocation.quantity,
+            'new_global_total': new_global,
+            'model_id': model_id
+        })
 
     return jsonify({'success': False, 'error': 'Invalid request parameters'}), 400
 
@@ -408,15 +429,18 @@ def delete_serial(serial_id):
 
 @app.route('/api/model/<int:model_id>/serials', methods=['GET'])
 def get_model_serials(model_id):
-    """Get all serial numbers assigned to a model."""
-    serials = SerialNumber.query.filter_by(model_id=model_id).all()
+    """Get all active serial numbers assigned to a model."""
+    serials = SerialNumber.query.filter_by(model_id=model_id, is_shipped=False).all()
     return jsonify({'success': True, 'serials': [format_serial(s) for s in serials]})
 
 
 @app.route('/api/container/<container_id>/serials', methods=['GET'])
 def get_container_serials(container_id):
-    """Get all serial numbers located inside a given container."""
-    serials = SerialNumber.query.join(PhysicalAllocation).filter(PhysicalAllocation.container_id == container_id).all()
+    """Get all active serial numbers located inside a given container."""
+    serials = SerialNumber.query.join(PhysicalAllocation).filter(
+        PhysicalAllocation.container_id == container_id,
+        SerialNumber.is_shipped == False
+    ).all()
     return jsonify({'success': True, 'serials': [format_serial(s) for s in serials]})
 
 @app.route('/api/export/csv', methods=['GET'])

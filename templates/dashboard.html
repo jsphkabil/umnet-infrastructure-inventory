@@ -724,6 +724,7 @@
                 listLocations.classList.remove('hidden');
                 listModels.classList.add('hidden');
                 
+                currentFocusedLocationId = null;
                 rebuildLocationSidebarTree();
             } else if (mode === 'shipped') {
                 btnShipped.className = activeStyle;
@@ -737,6 +738,7 @@
         }
 
         function focusShippedContainer() {
+            activeSidebarViewMode = 'shipped';
             currentFocusedLocationId = 'SHIPPED';
             currentFocusedModelId = null;
             
@@ -790,14 +792,17 @@
                 .then(locations => {
                     if (!locations || locations.length === 0) {
                         containerNode.innerHTML = `<div class="p-4 text-xs text-slate-400 text-center">No active containers found.</div>`;
+                        document.getElementById('target-display-name').innerText = "No Containers Available";
+                        document.getElementById('target-display-count').innerText = "0";
+                        document.getElementById('dynamic-grid-cards-container').innerHTML = `<div class="col-span-full p-8 text-center text-xs text-slate-400">All containers are empty.</div>`;
                         return;
                     }
 
                     locations.forEach(loc => {
                         containerNode.innerHTML += `
                             <div id="location-row-${loc}" 
-                                 onclick="focusPhysicalLocation('${loc}')" 
-                                 class="location-row p-3 hover:bg-slate-50 rounded-lg cursor-pointer transition-all flex justify-between items-center group border-l-4 border-transparent">
+                                onclick="focusPhysicalLocation('${loc}')" 
+                                class="location-row p-3 hover:bg-slate-50 rounded-lg cursor-pointer transition-all flex justify-between items-center group border-l-4 border-transparent">
                                 <div class="flex items-center space-x-2">
                                     <h4 class="font-mono font-bold text-slate-800 text-xs group-hover:text-michigan-blue transition-colors">${loc}</h4>
                                 </div>
@@ -805,8 +810,10 @@
                             </div>`;
                     });
                     
-                    const firstLoc = containerNode.querySelector('.location-row');
-                    if (firstLoc && !currentFocusedLocationId) firstLoc.click();
+                    // Automatically focus and display the first container in the list
+                    if (locations.length > 0) {
+                        focusPhysicalLocation(locations[0]);
+                    }
                 })
                 .catch(err => console.error(err));
         }
@@ -1422,6 +1429,8 @@
             } else if (activeSidebarViewMode === 'locations' && currentFocusedLocationId) {
                 focusPhysicalLocation(currentFocusedLocationId);
                 rebuildLocationSidebarTree();
+            } else if (activeSidebarViewMode === 'shipped') {
+                focusShippedContainer();
             }
         }
 

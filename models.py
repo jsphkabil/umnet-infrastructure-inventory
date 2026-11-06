@@ -34,11 +34,10 @@ class SerialNumber(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     serial_code = db.Column(db.String(100), nullable=False, unique=False, index=True)
-    
-    # NEW: Flag to track soft-deleted / shipped items
     is_shipped = db.Column(db.Boolean, default=False, nullable=False)
     
     model_id = db.Column(db.Integer, db.ForeignKey('equipment_models.id', ondelete='CASCADE'), nullable=False)
+    # FIX: Set nullable=True so shipped items can have no assigned location
     location_id = db.Column(db.Integer, db.ForeignKey('physical_allocations.id', ondelete='CASCADE'), nullable=True)
 
     def to_dict(self):
