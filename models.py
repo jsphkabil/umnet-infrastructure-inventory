@@ -35,17 +35,22 @@ class SerialNumber(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     serial_code = db.Column(db.String(100), nullable=False, unique=False, index=True)
     is_shipped = db.Column(db.Boolean, default=False, nullable=False)
+    shipped_destination = db.Column(db.String(120), nullable=True)
     
     model_id = db.Column(db.Integer, db.ForeignKey('equipment_models.id', ondelete='CASCADE'), nullable=False)
-    # FIX: Set nullable=True so shipped items can have no assigned location
     location_id = db.Column(db.Integer, db.ForeignKey('physical_allocations.id', ondelete='CASCADE'), nullable=True)
 
     def to_dict(self):
+        if self.is_shipped:
+            loc = self.shipped_destination if self.shipped_destination else "SHIPPED"
+        else:
+            loc = self.location.container_id if self.location else "Unassigned"
+            
         return {
             'id': self.id,
             'serial_code': self.serial_code,
             'model_id': self.model_id,
             'is_shipped': self.is_shipped,
             'location_id': self.location_id,
-            'container_id': "Shipped" if self.is_shipped else (self.location.container_id if self.location else "Unassigned")
+            'container_id': loc
         }

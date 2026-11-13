@@ -14,7 +14,6 @@ db.init_app(app)
 def fix_legacy_sqlite_unique_constraint():
     """Detect and repair legacy SQLite table schema including location_id NULL constraints."""
     try:
-        # 1. Ensure is_shipped column exists
         columns_info = db.session.execute(text("PRAGMA table_info(serial_numbers);")).fetchall()
         column_names = [col[1] for col in columns_info]
         
@@ -22,7 +21,10 @@ def fix_legacy_sqlite_unique_constraint():
             db.session.execute(text("ALTER TABLE serial_numbers ADD COLUMN is_shipped BOOLEAN NOT NULL DEFAULT 0;"))
             db.session.commit()
 
-        # 2. Recreate serial_numbers table if location_id is NOT NULL or serial_code has unique constraint
+        if 'shipped_destination' not in column_names:
+            db.session.execute(text("ALTER TABLE serial_numbers ADD COLUMN shipped_destination VARCHAR(120);"))
+            db.session.commit()
+
         schema_info = db.session.execute(text("SELECT sql FROM sqlite_master WHERE type='table' AND name='serial_numbers'")).scalar()
         if schema_info and ('NOT NULL' in schema_info.upper() and 'LOCATION_ID' in schema_info.upper()):
             db.session.execute(text("CREATE TABLE IF NOT EXISTS serial_numbers_backup AS SELECT * FROM serial_numbers;"))
@@ -32,8 +34,8 @@ def fix_legacy_sqlite_unique_constraint():
             db.create_all()
             
             db.session.execute(text("""
-                INSERT INTO serial_numbers (id, serial_code, is_shipped, model_id, location_id)
-                SELECT id, serial_code, is_shipped, model_id, location_id FROM serial_numbers_backup;
+                INSERT INTO serial_numbers (id, serial_code, is_shipped, shipped_destination, model_id, location_id)
+                SELECT id, serial_code, is_shipped, shipped_destination, model_id, location_id FROM serial_numbers_backup;
             """))
             db.session.execute(text("DROP TABLE serial_numbers_backup;"))
             db.session.commit()
@@ -127,21 +129,38 @@ def get_allocation_serials(alloc_id):
 
 @app.route('/api/serials/search', methods=['GET'])
 def search_serial():
-    """Search registered serial numbers by barcode string."""
+    """Search registered serial numbers by barcode, model, SKU, or shipped location."""
     query = request.args.get('q', '').strip()
     include_shipped = request.args.get('include_shipped', 'false').lower() == 'true'
 
     if not query:
         return jsonify({'success': True, 'results': []})
 
-    filter_criteria = [SerialNumber.serial_code.ilike(f"%{query}%")]
+    from sqlalchemy import or_
+    q_filter = f"%{query}%"
+    
+    # Join EquipmentModel so we can match against model_name or sku too
+    base_query = SerialNumber.query.join(EquipmentModel)
+    
     if not include_shipped:
-        filter_criteria.append(SerialNumber.is_shipped == False)
+        base_query = base_query.filter(SerialNumber.is_shipped == False)
 
-    serials = SerialNumber.query.filter(*filter_criteria).all()
+    serials = base_query.filter(
+        or_(
+            SerialNumber.serial_code.ilike(q_filter),
+            SerialNumber.shipped_destination.ilike(q_filter),
+            EquipmentModel.model_name.ilike(q_filter),
+            EquipmentModel.sku.ilike(q_filter)
+        )
+    ).all()
 
     results = []
     for s in serials:
+        if s.is_shipped:
+            loc_display = s.shipped_destination if s.shipped_destination else "SHIPPED"
+        else:
+            loc_display = s.location.container_id if s.location else 'Unassigned'
+
         results.append({
             'serial_id': s.id,
             'serial_code': s.serial_code,
@@ -149,7 +168,7 @@ def search_serial():
             'model_name': s.model.model_name if s.model else 'Unknown',
             'sku': s.model.sku if s.model else 'N/A',
             'is_shipped': s.is_shipped,
-            'container_id': "SHIPPED" if s.is_shipped else (s.location.container_id if s.location else 'Unassigned'),
+            'container_id': loc_display,
             'container_type': s.location.container_type if s.location else None
         })
 
@@ -200,6 +219,7 @@ def update_quantity(alloc_id):
     elif action == 'decrement':
         serial_id_to_remove = data.get('serial_id')
         relocated_container = data.get('relocated_container', '').strip().upper()
+        is_outside_spares = bool(data.get('is_outside_spares', False))
         
         if allocation.quantity <= 0:
             return jsonify({'success': False, 'error': 'Quantity is already at zero.'}), 400
@@ -213,8 +233,13 @@ def update_quantity(alloc_id):
             target_serial = SerialNumber.query.filter_by(location_id=allocation.id, is_shipped=False).first()
 
         if target_serial:
-            if relocated_container:
-                # Find or create relocation container target
+            # If checkbox is checked OR destination is left blank -> Send to Shipped Manifest
+            if is_outside_spares or not relocated_container:
+                target_serial.is_shipped = True
+                target_serial.location_id = None
+                target_serial.shipped_destination = relocated_container if relocated_container else 'SHIPPED'
+            else:
+                # Internal relocation inside spares room
                 target_alloc = PhysicalAllocation.query.filter_by(
                     model_id=model_id,
                     container_id=relocated_container
@@ -231,11 +256,8 @@ def update_quantity(alloc_id):
 
                 target_serial.location_id = target_alloc.id
                 target_serial.is_shipped = False
+                target_serial.shipped_destination = None
                 target_alloc.quantity += 1
-            else:
-                # Ship item if no destination entered
-                target_serial.is_shipped = True
-                target_serial.location_id = None
 
         if allocation.quantity <= 0:
             db.session.delete(allocation)
@@ -466,110 +488,154 @@ def get_container_serials(container_id):
 
 @app.route('/api/export/csv', methods=['GET'])
 def export_csv():
-    """Export complete warehouse inventory grouped by container as CSV/Excel download."""
+    """Export scoped inventory as a downloadable CSV/Excel file."""
     try:
-        allocations = PhysicalAllocation.query.filter(PhysicalAllocation.quantity > 0).order_by(PhysicalAllocation.container_id).all()
-        
+        scope = request.args.get('scope', 'all').lower()
+        model_id = request.args.get('model_id', type=int)
+        container_id = request.args.get('container_id', '').strip().upper()
+
+        headers, rows = build_export_rows(scope=scope, model_id=model_id, container_id=container_id)
+
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["Container Node", "Container Type", "Brand / Vendor", "Model Name", "SKU / Part Number", "Serial Code"])
+        writer.writerow(headers)
+        for r in rows:
+            writer.writerow(r)
 
-        for alloc in allocations:
-            serials = SerialNumber.query.filter_by(location_id=alloc.id).all()
-            model = alloc.hardware_profile
-            brand = extract_brand(model.model_name if model else '')
-            model_name = model.model_name if model else 'Unknown Model'
-            sku = model.sku if model else 'N/A'
-
-            for s in serials:
-                code = s.serial_code if s.serial_code and s.serial_code.strip() else '00000000'
-                writer.writerow([alloc.container_id, alloc.container_type or 'N/A', brand, model_name, sku, code])
-
-            remaining_qty = max(0, alloc.quantity - len(serials))
-            for _ in range(remaining_qty):
-                writer.writerow([alloc.container_id, alloc.container_type or 'N/A', brand, model_name, sku, '00000000'])
+        filename = "network_spares_all.csv"
+        if scope == 'model' and model_id:
+            m = db.session.get(EquipmentModel, model_id)
+            safe_sku = (m.sku if m else str(model_id)).replace('/', '_')
+            filename = f"network_spares_model_{safe_sku}.csv"
+        elif scope == 'container' and container_id:
+            filename = f"network_spares_container_{container_id}.csv"
+        elif scope == 'shipped':
+            filename = "network_spares_shipped.csv"
 
         output.seek(0)
         return Response(
             output.getvalue(),
             mimetype="text/csv",
-            headers={"Content-Disposition": "attachment;filename=network_spares_inventory.csv"}
+            headers={"Content-Disposition": f"attachment;filename={filename}"}
         )
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+def build_export_rows(scope='all', model_id=None, container_id=None):
+    """Helper to gather inventory rows across all, model, container, or shipped scopes."""
+    headers = ["Container Node", "Container Type", "Status", "Brand / Vendor", "Model Name", "SKU / Part Number", "Serial Code"]
+    rows = []
 
-@app.route('/api/export/google-sheets', methods=['POST'])
-def export_google_sheets():
-    """Export container inventory data for Google Sheets and Excel download."""
-    try:
-        allocations = PhysicalAllocation.query.filter(PhysicalAllocation.quantity > 0).order_by(PhysicalAllocation.container_id).all()
-        
-        sheet_data = []
+    # 1. Active Spares Room Allocations
+    if scope in ['all', 'model', 'container']:
+        alloc_query = PhysicalAllocation.query.filter(PhysicalAllocation.quantity > 0)
+        if scope == 'model' and model_id:
+            alloc_query = alloc_query.filter_by(model_id=model_id)
+        elif scope == 'container' and container_id:
+            alloc_query = alloc_query.filter_by(container_id=container_id)
+
+        allocations = alloc_query.order_by(PhysicalAllocation.container_id).all()
+
         for alloc in allocations:
-            serials = SerialNumber.query.filter_by(location_id=alloc.id).all()
+            serials = SerialNumber.query.filter_by(location_id=alloc.id, is_shipped=False).all()
             model = alloc.hardware_profile
             brand = extract_brand(model.model_name if model else '')
             model_name = model.model_name if model else 'Unknown Model'
             sku = model.sku if model else 'N/A'
 
-            unit_records = []
             for s in serials:
                 code = s.serial_code if s.serial_code and s.serial_code.strip() else '00000000'
-                unit_records.append({
-                    'brand': brand,
-                    'model_name': model_name,
-                    'sku': sku,
-                    'serial_code': code
-                })
+                rows.append([
+                    alloc.container_id,
+                    alloc.container_type or 'Storage Shelf',
+                    "In Spares Room",
+                    brand,
+                    model_name,
+                    sku,
+                    code
+                ])
 
             remaining_qty = max(0, alloc.quantity - len(serials))
             for _ in range(remaining_qty):
-                unit_records.append({
-                    'brand': brand,
-                    'model_name': model_name,
-                    'sku': sku,
-                    'serial_code': '00000000'
-                })
+                rows.append([
+                    alloc.container_id,
+                    alloc.container_type or 'Storage Shelf',
+                    "In Spares Room",
+                    brand,
+                    model_name,
+                    sku,
+                    '00000000'
+                ])
 
-            if unit_records:
-                sheet_data.append({
-                    'container_id': alloc.container_id,
-                    'container_type': alloc.container_type or 'N/A',
-                    'units': unit_records
-                })
+    # 2. Shipped / Outside Spares Room Devices (included only in 'all' and 'shipped')
+    if scope in ['all', 'shipped']:
+        shipped_serials = SerialNumber.query.filter_by(is_shipped=True).all()
+        for s in shipped_serials:
+            model = s.model
+            brand = extract_brand(model.model_name if model else '')
+            model_name = model.model_name if model else 'Unknown Model'
+            sku = model.sku if model else 'N/A'
+            dest = s.shipped_destination if s.shipped_destination else 'SHIPPED'
+            code = s.serial_code if s.serial_code and s.serial_code.strip() else '00000000'
 
-        tsv_rows = ["Container Node\tContainer Type\tBrand / Vendor\tModel Name\tSKU / Part Number\tSerial Code"]
-        
-        for group in sheet_data:
-            for u in group['units']:
-                tsv_rows.append(f"{group['container_id']}\t{group['container_type']}\t{u['brand']}\t{u['model_name']}\t{u['sku']}\t{u['serial_code']}")
+            rows.append([
+                dest,
+                "External / Shipped",
+                "Shipped",
+                brand,
+                model_name,
+                sku,
+                code
+            ])
 
+    return headers, rows
+
+
+@app.route('/api/export/google-sheets', methods=['POST'])
+def export_google_sheets():
+    """Export scoped inventory data for Google Sheets clipboard paste and CSV download."""
+    try:
+        data = request.get_json() or {}
+        scope = data.get('scope', 'all').lower()
+        model_id = data.get('model_id')
+        container_id = (data.get('container_id') or '').strip().upper()
+
+        if model_id is not None:
+            model_id = int(model_id)
+
+        headers, rows = build_export_rows(scope=scope, model_id=model_id, container_id=container_id)
+
+        tsv_rows = ["\t".join(headers)]
+        for r in rows:
+            tsv_rows.append("\t".join(str(cell) for cell in r))
         tsv_content = "\n".join(tsv_rows)
+
+        # Build query params for matching CSV download URL
+        query_parts = [f"scope={scope}"]
+        filename = "network_spares_all.csv"
+        if scope == 'model' and model_id:
+            query_parts.append(f"model_id={model_id}")
+            m = db.session.get(EquipmentModel, model_id)
+            safe_sku = (m.sku if m else str(model_id)).replace('/', '_')
+            filename = f"network_spares_model_{safe_sku}.csv"
+        elif scope == 'container' and container_id:
+            query_parts.append(f"container_id={container_id}")
+            filename = f"network_spares_container_{container_id}.csv"
+        elif scope == 'shipped':
+            filename = "network_spares_shipped.csv"
+
+        csv_url = f"/api/export/csv?{'&'.join(query_parts)}"
 
         creds_file = os.environ.get('GOOGLE_SERVICE_ACCOUNT_FILE', 'service_account.json')
         if os.path.exists(creds_file):
             try:
                 import gspread
                 gc = gspread.service_account(filename=creds_file)
-                sh = gc.create("Network Hardware Spares Inventory Matrix")
+                sh = gc.create(f"Network Hardware Inventory ({scope.upper()})")
                 worksheet = sh.get_worksheet(0)
-                
-                rows_to_append = [["Container Node", "Container Type", "Brand / Vendor", "Model Name", "SKU / Part Number", "Serial Code"]]
-                for group in sheet_data:
-                    for u in group['units']:
-                        rows_to_append.append([
-                            group['container_id'],
-                            group['container_type'],
-                            u['brand'],
-                            u['model_name'],
-                            u['sku'],
-                            u['serial_code']
-                        ])
-                worksheet.update('A1', rows_to_append)
-                
+                worksheet.update('A1', [headers] + rows)
                 try:
-                    worksheet.columns_auto_resize(0, 6)
+                    worksheet.columns_auto_resize(0, len(headers))
                 except Exception as resize_err:
                     print(f"Auto-resize info: {resize_err}")
 
@@ -577,6 +643,8 @@ def export_google_sheets():
                 return jsonify({
                     'success': True,
                     'spreadsheet_url': sh.url,
+                    'csv_download_url': csv_url,
+                    'filename': filename,
                     'tsv_data': tsv_content,
                     'message': 'Exported successfully to Google Sheets.'
                 })
@@ -587,10 +655,10 @@ def export_google_sheets():
             'success': True,
             'is_fallback': True,
             'spreadsheet_url': 'https://sheets.new',
-            'csv_download_url': '/api/export/csv',
+            'csv_download_url': csv_url,
+            'filename': filename,
             'tsv_data': tsv_content,
-            'inventory_by_container': sheet_data,
-            'message': 'Opening new blank Google Sheet, copying inventory data to clipboard, and downloading CSV/Excel spreadsheet.'
+            'message': 'Opening blank Google Sheet, copying data to clipboard, and downloading CSV.'
         })
 
     except Exception as e:
@@ -669,7 +737,7 @@ def update_serial(serial_id):
 
 @app.route('/api/import/csv', methods=['POST'])
 def import_csv():
-    """Import inventory records with three modes: add, subtract, and replace."""
+    """Import inventory records supporting Status column and tiered ADD/SUBTRACT/REPLACE logic."""
     try:
         mode = request.form.get('mode', 'add').lower()
         csv_text = None
@@ -690,7 +758,6 @@ def import_csv():
         if mode not in ['add', 'subtract', 'replace']:
             return jsonify({'success': False, 'error': 'Invalid import mode specified.'}), 400
 
-        # Replace mode purges existing records first
         if mode == 'replace':
             SerialNumber.query.delete()
             PhysicalAllocation.query.delete()
@@ -710,6 +777,15 @@ def import_csv():
         model_cache = {}
         alloc_cache = {}
 
+        def parse_is_shipped(status_str, container_str):
+            s = (status_str or '').strip().lower()
+            c = (container_str or '').strip().upper()
+            if s in ['shipped', 'yes', 'true', 'outside', 'out', 'outside spares room', 'deployed']:
+                return True
+            if c == 'SHIPPED':
+                return True
+            return False
+
         for row in reader:
             if not row or not any(row):
                 continue
@@ -721,6 +797,7 @@ def import_csv():
 
             container_id = "UNASSIGNED"
             container_type = "Storage Shelf"
+            status_val = "In Spares Room"
             model_name = "Unknown Model"
             sku = "GENERIC-SKU"
             raw_serial_code = "00000000"
@@ -734,6 +811,8 @@ def import_csv():
                             container_id = val or container_id
                         elif 'container type' in h_key or 'type' in h_key:
                             container_type = val or container_type
+                        elif 'status' in h_key or 'shipped' in h_key or 'spares room' in h_key:
+                            status_val = val or status_val
                         elif 'model name' in h_key or 'model' in h_key:
                             model_name = val or model_name
                         elif 'sku' in h_key or 'part number' in h_key:
@@ -741,15 +820,25 @@ def import_csv():
                         elif 'serial' in h_key:
                             raw_serial_code = val or raw_serial_code
             else:
-                if len(row) >= 1: container_id = row[0].strip() or container_id
-                if len(row) >= 2: container_type = row[1].strip() or container_type
-                if len(row) >= 4: model_name = row[3].strip() or model_name
-                if len(row) >= 5: sku = row[4].strip() or sku
-                if len(row) >= 6: raw_serial_code = row[5].strip() or raw_serial_code
+                # Positional fallback: 7-column new format vs 6-column legacy format
+                if len(row) >= 7:
+                    container_id = row[0].strip() or container_id
+                    container_type = row[1].strip() or container_type
+                    status_val = row[2].strip() or status_val
+                    model_name = row[4].strip() or model_name
+                    sku = row[5].strip() or sku
+                    raw_serial_code = row[6].strip() or raw_serial_code
+                else:
+                    if len(row) >= 1: container_id = row[0].strip() or container_id
+                    if len(row) >= 2: container_type = row[1].strip() or container_type
+                    if len(row) >= 4: model_name = row[3].strip() or model_name
+                    if len(row) >= 5: sku = row[4].strip() or sku
+                    if len(row) >= 6: raw_serial_code = row[5].strip() or raw_serial_code
 
             sku = sku.upper()
             container_id = container_id.upper()
             raw_serial_code = raw_serial_code.upper() if raw_serial_code else "00000000"
+            row_is_shipped = parse_is_shipped(status_val, container_id)
 
             if mode in ['add', 'replace']:
                 if sku not in model_cache:
@@ -762,54 +851,100 @@ def import_csv():
                 else:
                     model = model_cache[sku]
 
-                alloc_key = (model.id, container_id)
-                if alloc_key not in alloc_cache:
-                    alloc = PhysicalAllocation.query.filter_by(model_id=model.id, container_id=container_id).first()
-                    if not alloc:
-                        alloc = PhysicalAllocation(
-                            model_id=model.id,
-                            container_id=container_id,
-                            container_type=container_type,
-                            quantity=0
-                        )
-                        db.session.add(alloc)
-                        db.session.flush()
-                    alloc_cache[alloc_key] = alloc
-                else:
-                    alloc = alloc_cache[alloc_key]
-
                 final_sn = '00000000' if not raw_serial_code else raw_serial_code
-                new_sn = SerialNumber(
-                    serial_code=final_sn,
-                    model_id=model.id,
-                    location_id=alloc.id
-                )
-                db.session.add(new_sn)
-                alloc.quantity += 1
-                items_modified += 1
+
+                if row_is_shipped:
+                    # Route straight to Shipped Manifest without creating a Spares Room allocation
+                    dest_label = container_id if container_id not in ['UNASSIGNED', ''] else 'SHIPPED'
+                    new_sn = SerialNumber(
+                        serial_code=final_sn,
+                        model_id=model.id,
+                        location_id=None,
+                        is_shipped=True,
+                        shipped_destination=dest_label
+                    )
+                    db.session.add(new_sn)
+                    items_modified += 1
+                else:
+                    # Active Spares Room item
+                    alloc_key = (model.id, container_id)
+                    if alloc_key not in alloc_cache:
+                        alloc = PhysicalAllocation.query.filter_by(model_id=model.id, container_id=container_id).first()
+                        if not alloc:
+                            alloc = PhysicalAllocation(
+                                model_id=model.id,
+                                container_id=container_id,
+                                container_type=container_type,
+                                quantity=0
+                            )
+                            db.session.add(alloc)
+                            db.session.flush()
+                        alloc_cache[alloc_key] = alloc
+                    else:
+                        alloc = alloc_cache[alloc_key]
+
+                    new_sn = SerialNumber(
+                        serial_code=final_sn,
+                        model_id=model.id,
+                        location_id=alloc.id,
+                        is_shipped=False,
+                        shipped_destination=None
+                    )
+                    db.session.add(new_sn)
+                    alloc.quantity += 1
+                    items_modified += 1
 
             elif mode == 'subtract':
                 model = EquipmentModel.query.filter_by(sku=sku).first()
                 if model:
-                    alloc = PhysicalAllocation.query.filter_by(model_id=model.id, container_id=container_id).first()
-                    if alloc:
-                        if raw_serial_code != '00000000':
+                    target_serial = None
+
+                    # 1. Try matching a specific serial code first (both active and shipped)
+                    if raw_serial_code != '00000000':
+                        # Prefer active spares room match first, then shipped match
+                        target_serial = SerialNumber.query.filter_by(
+                            model_id=model.id,
+                            serial_code=raw_serial_code,
+                            is_shipped=False
+                        ).first()
+                        if not target_serial:
                             target_serial = SerialNumber.query.filter_by(
-                                location_id=alloc.id, 
+                                model_id=model.id,
                                 serial_code=raw_serial_code,
+                                is_shipped=True
+                            ).first()
+                    else:
+                        # Fallback for generic '00000000' barcodes: check active container first, then shipped
+                        alloc = PhysicalAllocation.query.filter_by(model_id=model.id, container_id=container_id).first()
+                        if alloc:
+                            target_serial = SerialNumber.query.filter_by(
+                                location_id=alloc.id,
                                 is_shipped=False
                             ).first()
-                        else:
-                            target_serial = SerialNumber.query.filter_by(location_id=alloc.id, is_shipped=False).first()
+                        if not target_serial:
+                            target_serial = SerialNumber.query.filter_by(
+                                model_id=model.id,
+                                is_shipped=True
+                            ).first()
 
-                        if target_serial:
+                    if target_serial:
+                        if not target_serial.is_shipped:
+                            # Tier 1: Currently in Spares Room -> Move to Shipped Manifest
+                            old_alloc = target_serial.location
+                            dest_label = container_id if container_id not in ['UNASSIGNED', ''] else 'SHIPPED'
                             target_serial.is_shipped = True
                             target_serial.location_id = None
-                            alloc.quantity -= 1
-                            items_modified += 1
-                            
-                            if alloc.quantity <= 0:
-                                db.session.delete(alloc)
+                            target_serial.shipped_destination = dest_label
+
+                            if old_alloc:
+                                old_alloc.quantity -= 1
+                                if old_alloc.quantity <= 0:
+                                    db.session.delete(old_alloc)
+                        else:
+                            # Tier 2: Already marked as Shipped -> Permanently delete from DB
+                            db.session.delete(target_serial)
+
+                        items_modified += 1
 
             rows_processed += 1
 
@@ -830,13 +965,14 @@ def get_shipped_items():
     items = []
     for s in shipped_serials:
         items.append({
+            'id': s.id,
             'serial_id': s.id,
             'serial_code': s.serial_code,
             'model_id': s.model_id,
             'model_name': s.model.model_name if s.model else 'Unknown Model',
             'sku': s.model.sku if s.model else 'N/A',
             'is_shipped': True,
-            'container_id': 'SHIPPED'
+            'container_id': s.shipped_destination if s.shipped_destination else 'SHIPPED'
         })
         
     return jsonify({
